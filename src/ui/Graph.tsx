@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text } from 'ink';
 import { statusAt, type AgentInfo, type SessionState } from '../model/state.js';
+import { oneLine } from '../oneLine.js';
 import { stepFlows, type ActiveFlow } from './flowAnim.js';
 import { effortText, fmtTokens } from './format.js';
 import { layoutGraph, type GraphLayout } from './graphLayout.js';
@@ -16,7 +17,8 @@ function newGrid(w: number, h: number): Grid {
 
 function put(g: Grid, x: number, y: number, text: string, color = '', onlyBlank = false, bg = ''): void {
   if (y < 0 || y >= g.ch.length) return;
-  [...text].forEach((c, i) => {
+  // a newline or tab in a cell would tear the whole frame, so nothing but one-line text goes in
+  [...text.replace(/[\r\n\t]/g, ' ')].forEach((c, i) => {
     const px = x + i;
     if (px < 0 || px >= g.ch[y].length) return;
     if (onlyBlank && g.ch[y][px] !== ' ') return;
@@ -134,8 +136,8 @@ function drawAdvisor(g: Grid, b: Rect, state: SessionState): void {
   const configured = calls.length > 0;
   const color = configured ? colors.advisor : colors.dim;
   box(g, b, configured ? colors.advisor : colors.border);
-  putSplit(g, b, 1, 'ADVISOR', colors.advisor, '[opus]', colors.muted);
-  put(g, b.x + 2, b.y + 2, clip(configured ? `● ${calls.length} call${calls.length === 1 ? '' : 's'}` : '○ not configured', b.w - 4),
+  putSplit(g, b, 1, 'ADVISOR', colors.advisor, `[${state.advisorModel ?? 'opus'}]`, colors.muted);
+  put(g, b.x + 2, b.y + 2, clip(configured ? `● ${calls.length} call${calls.length === 1 ? '' : 's'}` : state.advisorModel ? '○ no calls yet' : '○ not configured', b.w - 4),
     configured ? colors.bright : colors.dim);
   if (configured) put(g, b.x + 2, b.y + 3, clip(`${fmtTokens(calls.reduce((n, c) => n + c.tokens, 0))} tokens`, b.w - 4), colors.dim);
   for (let x = b.x + 1; x < b.x + b.w - 1; x++) put(g, x, b.y + 4, '─', colors.frame);
@@ -152,7 +154,7 @@ function drawMain(g: Grid, b: Rect, state: SessionState, frame: number): void {
   putSplit(g, b, 1, 'MAIN', colors.main, a0?.model ? `[${a0.model}]` : '', colors.muted);
   const inner = b.w - 4;
   put(g, b.x + 2, b.y + 2, status === 'working' ? '●' : '○', status === 'working' ? colors.bright : colors.dim);
-  put(g, b.x + 4, b.y + 2, clip(state.currentTask, inner - 2), status === 'working' ? colors.bright : colors.dim);
+  put(g, b.x + 4, b.y + 2, clip(oneLine(state.currentTask), inner - 2), status === 'working' ? colors.bright : colors.dim);
   put(g, b.x + 2, b.y + 3, 'effort ', colors.dim);
   const used = putEffort(g, b.x + 9, b.y + 3, a0?.effort, colors.main, inner - 7);
   if (!used) put(g, b.x + 9, b.y + 3, clip('unknown', inner - 7), colors.dim);

@@ -33913,6 +33913,9 @@ function emptyState(sessionId) {
   };
 }
 
+// src/oneLine.ts
+var oneLine = (t) => t.replace(/\s+/g, " ").trim();
+
 // src/ui/flowAnim.ts
 var MAX_DOTS = 6;
 var MAX_TRIES = 20;
@@ -34040,7 +34043,7 @@ function newGrid(w, h) {
 }
 function put(g, x, y, text, color = "", onlyBlank = false, bg = "") {
   if (y < 0 || y >= g.ch.length) return;
-  [...text].forEach((c, i) => {
+  [...text.replace(/[\r\n\t]/g, " ")].forEach((c, i) => {
     const px = x + i;
     if (px < 0 || px >= g.ch[y].length) return;
     if (onlyBlank && g.ch[y][px] !== " ") return;
@@ -34157,12 +34160,12 @@ function drawAdvisor(g, b, state) {
   const configured = calls.length > 0;
   const color = configured ? colors.advisor : colors.dim;
   box(g, b, configured ? colors.advisor : colors.border);
-  putSplit(g, b, 1, "ADVISOR", colors.advisor, "[opus]", colors.muted);
+  putSplit(g, b, 1, "ADVISOR", colors.advisor, `[${state.advisorModel ?? "opus"}]`, colors.muted);
   put(
     g,
     b.x + 2,
     b.y + 2,
-    clip(configured ? `\u25CF ${calls.length} call${calls.length === 1 ? "" : "s"}` : "\u25CB not configured", b.w - 4),
+    clip(configured ? `\u25CF ${calls.length} call${calls.length === 1 ? "" : "s"}` : state.advisorModel ? "\u25CB no calls yet" : "\u25CB not configured", b.w - 4),
     configured ? colors.bright : colors.dim
   );
   if (configured) put(g, b.x + 2, b.y + 3, clip(`${fmtTokens(calls.reduce((n, c) => n + c.tokens, 0))} tokens`, b.w - 4), colors.dim);
@@ -34179,7 +34182,7 @@ function drawMain(g, b, state, frame) {
   putSplit(g, b, 1, "MAIN", colors.main, a0?.model ? `[${a0.model}]` : "", colors.muted);
   const inner = b.w - 4;
   put(g, b.x + 2, b.y + 2, status === "working" ? "\u25CF" : "\u25CB", status === "working" ? colors.bright : colors.dim);
-  put(g, b.x + 4, b.y + 2, clip(state.currentTask, inner - 2), status === "working" ? colors.bright : colors.dim);
+  put(g, b.x + 4, b.y + 2, clip(oneLine(state.currentTask), inner - 2), status === "working" ? colors.bright : colors.dim);
   put(g, b.x + 2, b.y + 3, "effort ", colors.dim);
   const used = putEffort(g, b.x + 9, b.y + 3, a0?.effort, colors.main, inner - 7);
   if (!used) put(g, b.x + 9, b.y + 3, clip("unknown", inner - 7), colors.dim);
@@ -34266,9 +34269,9 @@ function buildChips(state, now) {
   chips.push({
     name: "advisor",
     color: colors.advisor,
-    model: "opus",
+    model: state.advisorModel ?? "opus",
     active: !!last && now - Date.parse(last.time) < ADVISOR_RECENT_MS,
-    status: calls.length ? `${calls.length} call${calls.length === 1 ? "" : "s"}` : "not configured",
+    status: calls.length ? `${calls.length} call${calls.length === 1 ? "" : "s"}` : state.advisorModel ? "no calls yet" : "not configured",
     tokens: calls.reduce((n, c) => n + c.tokens, 0)
   });
   const byRole = /* @__PURE__ */ new Map();
@@ -34310,7 +34313,7 @@ function Header({ state, teamOn, now, width }) {
       /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Text, { bold: true, color: colors.bright, children: "pitwall" }),
       /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Text, { color: colors.border, children: " \u2502 " }),
       /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Text, { color: colors.bright, children: state.currentTask || "no task yet" }),
-      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(Text, { color: teamOn ? colors.done : colors.dim, children: [
+      teamOn === void 0 ? null : /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(Text, { color: teamOn ? colors.done : colors.dim, children: [
         "  [",
         teamOn ? "team on" : "team off",
         "]"
@@ -34440,7 +34443,7 @@ function Stats({ state, limits, now, width = STATS_WIDTH }) {
         }
       ) : null
     ] }) }),
-    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Section, { width, title: "ADVISOR", titleColor: colors.advisor, right: `opus \xB7 ${calls.length} call${calls.length === 1 ? "" : "s"}`, children: calls.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.dim, children: "not called yet" }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Section, { width, title: "ADVISOR", titleColor: colors.advisor, right: `${state.advisorModel ?? "opus"} \xB7 ${calls.length} call${calls.length === 1 ? "" : "s"}`, children: calls.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.dim, children: "not called yet" }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
       /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { color: colors.dim, children: [
         fmtTokens(calls.reduce((n, c) => n + c.tokens, 0)),
         " tokens"
@@ -34492,11 +34495,16 @@ import { readFileSync as readFileSync3 } from "node:fs";
 
 // src/model/categories.ts
 var TEST_COMMAND = /\b(test|vitest|jest|pytest|tsc|lint|build|cargo check|go vet)\b/;
+var LOOKS_ONLY = /^(ls|cat|head|tail|grep|egrep|rg|find|tree|wc|stat|file|less|awk|sed -n|git (diff|log|show|status|grep|blame))\b/;
+function onlyLooks(command2) {
+  const c = command2.trim().replace(/^cd\s+[^;&|]+(&&|;)\s*/, "");
+  return LOOKS_ONLY.test(c) && !c.replace(/2>&1|2>\/dev\/null/g, "").includes(">");
+}
 function categorize(blocks, hasEdited) {
   const tools = blocks.filter((b) => b.type === "tool_use");
   if (tools.some((t) => ["Edit", "Write", "NotebookEdit"].includes(t.name))) return "coding";
   if (tools.some((t) => t.name === "Bash" && TEST_COMMAND.test(String(t.input.command ?? "")))) return "tests";
-  if (tools.some((t) => ["Read", "Grep", "Glob", "WebFetch", "WebSearch"].includes(t.name))) return "reading";
+  if (tools.some((t) => ["Read", "Grep", "Glob", "WebFetch", "WebSearch"].includes(t.name) || t.name === "Bash" && onlyLooks(String(t.input.command ?? "")))) return "reading";
   const chars = blocks.reduce((n, b) => n + (b.type === "text" ? b.chars : 0), 0);
   if (!hasEdited && (tools.some((t) => t.name === "TodoWrite") || chars > 1200)) return "planning";
   return "talking";
@@ -34530,7 +34538,7 @@ function settle(s, a, status, time) {
 function registerSubagent(s, key, meta) {
   const a = agentFor(s, key);
   a.role = meta.agentType;
-  a.title = meta.description;
+  a.title = oneLine(meta.description);
   if (meta.pickedEffortModel) a.model = modelAlias(meta.pickedEffortModel);
   if (meta.toolUseId) a.toolUseId = meta.toolUseId;
   const time = s.lastActivity ?? "";
@@ -34540,7 +34548,7 @@ function registerSubagent(s, key, meta) {
 function onToolUse(s, key, time, b) {
   const who = agentFor(s, key).role;
   if (b.name === "Agent") {
-    const description = String(b.input.description ?? "");
+    const description = oneLine(String(b.input.description ?? ""));
     const type = String(b.input.subagent_type ?? "general-purpose");
     s.pendingFlows.push({ from: key, to: b.id, label: description, color: colorForRole(type), at: time });
     log(s, time, who, `${who} \u2192 ${type}: ${description}`);
@@ -34610,6 +34618,7 @@ function applyEvent(s, agentKey, e) {
     }
   }
   if (e.effort) agent.effort = e.effort;
+  if (e.advisorModel) s.advisorModel = modelAlias(e.advisorModel);
   if (agent.status !== "failed" && agent.status !== "done") agent.status = "working";
   for (const b of e.blocks) {
     if (b.type === "tool_use" || b.type === "server_tool_use") {
@@ -34710,6 +34719,7 @@ function toBlock(b) {
 }
 var NOT_A_PROMPT = /^(<(command-|local-command-|system-reminder|task-notification)|\[Request interrupted)/;
 var isPrompt = (t) => !NOT_A_PROMPT.test(t.trimStart());
+var promptText = (t) => oneLine(t.replace(/<\/?pasted_content[^>]*>/g, " "));
 function parseLine(raw) {
   let d;
   try {
@@ -34730,6 +34740,7 @@ function parseLine(raw) {
       messageId: m.id ?? "",
       model: m.model ?? "",
       effort: d.effort,
+      advisorModel: d.advisorModel,
       usage: toUsage(m.usage),
       ...advisorIts.length ? { advisorUsage: sum(advisorIts) } : {},
       blocks
@@ -34737,15 +34748,19 @@ function parseLine(raw) {
   }
   if (d.type === "user" && m) {
     if (d.isMeta) return null;
-    if (typeof m.content === "string") return isPrompt(m.content) ? { kind: "userPrompt", time, text: m.content } : null;
+    if (typeof m.content === "string") {
+      const text = promptText(m.content);
+      return text && isPrompt(m.content) ? { kind: "userPrompt", time, text } : null;
+    }
     if (Array.isArray(m.content)) {
       const r = m.content.find((c) => c?.type === "tool_result");
       if (r) {
         const text2 = typeof r.content === "string" ? r.content : Array.isArray(r.content) ? r.content.filter((c) => c?.type === "text").map((c) => c.text).join("\n") : "";
         return { kind: "toolResult", time, toolUseId: r.tool_use_id, isError: r.is_error === true, text: text2 };
       }
-      const text = m.content.filter((c) => c?.type === "text" && typeof c.text === "string").map((c) => c.text).join("\n");
-      if (text && isPrompt(text)) return { kind: "userPrompt", time, text };
+      const raw2 = m.content.filter((c) => c?.type === "text" && typeof c.text === "string").map((c) => c.text).join("\n");
+      const text = promptText(raw2);
+      if (text && isPrompt(raw2)) return { kind: "userPrompt", time, text };
     }
   }
   return null;
@@ -34925,7 +34940,7 @@ function App2({ cwd: cwd2, home, sessionId, width, height, pollMs = 500, tickMs 
   const graphHeight = Math.max(16, size.height - headerHeight(state, size.width) - logHeight(LOG_ROWS) - 1);
   const limits = readLimits(state.sessionId, home);
   return /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(Box_default, { flexDirection: "column", width: size.width, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Header, { state, teamOn: false, now, width: size.width }),
+    /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Header, { state, now, width: size.width }),
     /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(Box_default, { children: [
       /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(Box_default, { flexDirection: "column", children: [
         /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Graph, { state, width: graphWidth, height: graphHeight, tickMs }),

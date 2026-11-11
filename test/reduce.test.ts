@@ -221,3 +221,12 @@ describe('session log', () => {
     expect(texts(s)).toEqual(['Explore: edited b.ts']);
   });
 });
+
+describe('configured advisor', () => {
+  it('records the advisor model from the assistant lines, even with no call yet', () => {
+    const s = emptyState('s');
+    applyEvent(s, 'main', asst({ advisorModel: 'claude-opus-5-5' }));
+    expect(s.advisorModel).toBe('opus');
+    expect(s.advisorCalls).toHaveLength(0);
+  });
+});

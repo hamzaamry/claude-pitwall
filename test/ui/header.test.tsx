@@ -58,6 +58,19 @@ describe('Header', () => {
     expect(f).toContain('not configured');
   });
 
+  it('says "no calls yet" when the advisor is configured but was never called', () => {
+    const s = sample();
+    s.advisorModel = 'opus';
+    const f = render(<Header state={s} teamOn={false} now={T0} width={150} />).lastFrame()!;
+    expect(f).not.toContain('not configured');
+    expect(f).toContain('no calls yet');
+  });
+
+  it('shows no team pill when the team switch is unknown (phase 1)', () => {
+    const f = render(<Header state={sample()} now={T0} width={150} />).lastFrame()!;
+    expect(f).not.toContain('team');
+  });
+
   it('shows the advisor chip with its calls once there is one', () => {
     const s = sample();
     s.advisorCalls.push({ time: 't', source: 'native', why: 'native advice', tokens: 26_300 });

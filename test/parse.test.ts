@@ -57,6 +57,18 @@ describe('parseLine', () => {
     expect(parseLine(user('[Request interrupted by user for tool use]'))).toBeNull();
     expect(parseLine(user('[Request interrupted by user]'))).toBeNull();
   });
+  it('flattens a pasted multi-line prompt to one line and drops the paste wrapper', () => {
+    expect(parseLine(user('<pasted_content id="c1">\n1. Consult your advisor\n2. Next\n</pasted_content>')))
+      .toMatchObject({ kind: 'userPrompt', text: '1. Consult your advisor 2. Next' });
+    expect(parseLine(user('line one\n\n  line two\ttab'))).toMatchObject({ text: 'line one line two tab' });
+  });
+  it('a prompt that is only a paste wrapper is not a prompt', () => {
+    expect(parseLine(user('<pasted_content id="c1">\n</pasted_content>'))).toBeNull();
+  });
+  it('exposes the configured advisor model of an assistant line', () => {
+    const e = parseLine(fx('assistant-agent'));
+    expect(e?.kind === 'assistant' && e.advisorModel).toBe('claude-opus-5-5');
+  });
   it('takes the text of a prompt stored as an array (e.g. with an image)', () => {
     expect(parseLine(user([{ type: 'image', source: {} }, { type: 'text', text: 'fix this' }])))
       .toMatchObject({ kind: 'userPrompt', text: 'fix this' });

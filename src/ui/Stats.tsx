@@ -80,7 +80,7 @@ export function Stats({ state, limits, now, width = STATS_WIDTH }: { state: Sess
           </>
         )}
       </Section>
-      <Section width={width} title="ADVISOR" titleColor={colors.advisor} right={`opus · ${calls.length} call${calls.length === 1 ? '' : 's'}`}>
+      <Section width={width} title="ADVISOR" titleColor={colors.advisor} right={`${state.advisorModel ?? 'opus'} · ${calls.length} call${calls.length === 1 ? '' : 's'}`}>
         {calls.length === 0 ? <Text color={colors.dim}>not called yet</Text> : (
           <>
             <Text color={colors.dim}>{fmtTokens(calls.reduce((n, c) => n + c.tokens, 0))} tokens</Text>

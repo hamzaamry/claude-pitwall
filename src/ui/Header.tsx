@@ -21,9 +21,9 @@ export function buildChips(state: SessionState, now: number): Chip[] {
   const calls = state.advisorCalls;
   const last = calls[calls.length - 1];
   chips.push({
-    name: 'advisor', color: colors.advisor, model: 'opus',
+    name: 'advisor', color: colors.advisor, model: state.advisorModel ?? 'opus',
     active: !!last && now - Date.parse(last.time) < ADVISOR_RECENT_MS,
-    status: calls.length ? `${calls.length} call${calls.length === 1 ? '' : 's'}` : 'not configured',
+    status: calls.length ? `${calls.length} call${calls.length === 1 ? '' : 's'}` : state.advisorModel ? 'no calls yet' : 'not configured',
     tokens: calls.reduce((n, c) => n + c.tokens, 0),
   });
 
@@ -57,7 +57,7 @@ export function headerHeight(state: SessionState, width: number): number {
 }
 
 export function Header({ state, teamOn, now, width }: {
-  state: SessionState; teamOn: boolean; now: number; width: number;
+  state: SessionState; teamOn?: boolean; now: number; width: number;
 }) {
   const agents = Object.values(state.agents);
   const total = agents.reduce((n, a) => n + a.tokens, 0);
@@ -71,7 +71,7 @@ export function Header({ state, teamOn, now, width }: {
       <Text wrap="truncate-end">
         <Text bold color={colors.bright}>pitwall</Text><Text color={colors.border}> │ </Text>
         <Text color={colors.bright}>{state.currentTask || 'no task yet'}</Text>
-        <Text color={teamOn ? colors.done : colors.dim}>  [{teamOn ? 'team on' : 'team off'}]</Text>
+        {teamOn === undefined ? null : <Text color={teamOn ? colors.done : colors.dim}>  [{teamOn ? 'team on' : 'team off'}]</Text>}
         <Text color={colors.muted}>   tokens </Text><Text color={colors.bright}>{fmtTokens(total)}</Text>
         {advisorTokens > 0 ? <Text color={colors.advisor}> + advisor {fmtTokens(advisorTokens)}</Text> : null}
         <Text color={colors.muted}>   elapsed </Text><Text color={colors.bright}>{elapsed}</Text>

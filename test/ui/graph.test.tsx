@@ -68,6 +68,25 @@ describe('Graph', () => {
     expect(f).toContain('delegate');
   });
 
+  it('a multi-line task does not tear the layout', () => {
+    const s = base();
+    s.currentTask = 'line one\nline two\r\nline three';
+    s.agents.a1 = { key: 'a1', role: 'Explore', model: 'opus', title: 'find\ncallers', tokens: 5, status: 'working' };
+    s.agents.a2 = { key: 'a2', role: 'Explore', model: 'opus', title: 'second', tokens: 5, status: 'working' };
+    const f = render(<Graph state={s} width={110} height={22} tickMs={0} />).lastFrame()!;
+    expect(f.split('\n')).toHaveLength(22);
+    expect(f).toContain('┴');
+    expect(f).toContain('find callers');
+  });
+
+  it('says "no calls yet" when the advisor is configured but never called', () => {
+    const s = base();
+    s.advisorModel = 'opus';
+    const f = render(<Graph state={s} width={100} height={22} tickMs={0} />).lastFrame()!;
+    expect(f).not.toContain('not configured');
+    expect(f).toContain('no calls yet');
+  });
+
   it('does not crash on a tiny terminal', () => {
     expect(() => render(<Graph state={base()} width={12} height={5} tickMs={0} />).lastFrame()).not.toThrow();
   });

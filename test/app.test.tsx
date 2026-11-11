@@ -57,6 +57,11 @@ describe('App', () => {
     expect(f).toContain('find callers');
   });
 
+  it('shows no team pill in phase 1', () => {
+    cpSync(FIXTURE, projectDir, { recursive: true });
+    expect(show(170)).not.toContain('team');
+  });
+
   it('has a footer with the quit key', () => {
     cpSync(FIXTURE, projectDir, { recursive: true });
     const f = show(170);

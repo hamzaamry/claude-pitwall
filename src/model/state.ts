@@ -17,6 +17,7 @@ export type SessionState = {
   log: LogEntry[];                        // capped at 200 entries
   pendingFlows: Flow[];                   // consumed by the graph animation
   hasEdited: boolean;                     // main has edited since the last user prompt
+  advisorModel?: string;                  // set on every assistant line once an advisor is configured
   taskNo: number;                         // counts main user prompts; categories belong to the current one
   // bookkeeping for messages written on several lines (one line per content block)
   msgInfo: Map<string, { tokens: number; blocks: Block[]; category: Category; task: number }>;

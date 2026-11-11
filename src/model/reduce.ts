@@ -1,4 +1,5 @@
 import type { Block, TranscriptEvent } from '../transcript/types.js';
+import { oneLine } from '../oneLine.js';
 import { colorForRole, colors } from '../ui/theme.js';
 import { categorize, TEST_COMMAND } from './categories.js';
 import type { AgentInfo, Category, SessionState } from './state.js';
@@ -40,7 +41,7 @@ export function registerSubagent(
 ): void {
   const a = agentFor(s, key);
   a.role = meta.agentType;
-  a.title = meta.description;
+  a.title = oneLine(meta.description);
   if (meta.pickedEffortModel) a.model = modelAlias(meta.pickedEffortModel);
   if (meta.toolUseId) a.toolUseId = meta.toolUseId;
   const time = s.lastActivity ?? '';
@@ -51,7 +52,7 @@ export function registerSubagent(
 function onToolUse(s: SessionState, key: string, time: string, b: Extract<Block, { type: 'tool_use' }>): void {
   const who = agentFor(s, key).role;
   if (b.name === 'Agent') {
-    const description = String(b.input.description ?? '');
+    const description = oneLine(String(b.input.description ?? ''));
     const type = String(b.input.subagent_type ?? 'general-purpose');
     s.pendingFlows.push({ from: key, to: b.id, label: description, color: colorForRole(type), at: time });
     log(s, time, who, `${who} → ${type}: ${description}`);
@@ -132,6 +133,7 @@ export function applyEvent(s: SessionState, agentKey: string, e: TranscriptEvent
     }
   }
   if (e.effort) agent.effort = e.effort;
+  if (e.advisorModel) s.advisorModel = modelAlias(e.advisorModel);
   if (agent.status !== 'failed' && agent.status !== 'done') agent.status = 'working';
 
   for (const b of e.blocks) {

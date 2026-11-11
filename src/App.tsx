@@ -59,7 +59,7 @@ export function App({ cwd, home, sessionId, width, height, pollMs = 500, tickMs 
 
   return (
     <Box flexDirection="column" width={size.width}>
-      <Header state={state} teamOn={false} now={now} width={size.width} />
+      <Header state={state} now={now} width={size.width} />
       <Box>
         <Box flexDirection="column">
           <Graph state={state} width={graphWidth} height={graphHeight} tickMs={tickMs} />

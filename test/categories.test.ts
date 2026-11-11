@@ -11,8 +11,18 @@ describe('categorize', () => {
   it('NotebookEdit is coding', () => expect(categorize([tool('NotebookEdit')], false)).toBe('coding'));
   it('Bash with a test command is tests', () =>
     expect(categorize([tool('Bash', { command: 'npx vitest run' })], false)).toBe('tests'));
-  it('Bash with another command is not tests', () =>
-    expect(categorize([tool('Bash', { command: 'ls -la' })], false)).toBe('talking'));
+  it('Bash with an unrelated command is not tests', () =>
+    expect(categorize([tool('Bash', { command: 'echo hi' })], false)).toBe('talking'));
+  it('Bash that only looks at files is reading', () => {
+    for (const command of ['ls -la', 'cat app/x.ts', 'grep -rn foo src', 'rg foo', 'find . -name "*.ts"', 'head -20 a.ts',
+      'cd /repo && git diff HEAD~1', 'sed -n 1,20p a.ts', 'wc -l a.ts', 'git log --oneline | head']) {
+      expect(categorize([tool('Bash', { command })], false), command).toBe('reading');
+    }
+  });
+  it('a test command after cd is still tests', () =>
+    expect(categorize([tool('Bash', { command: 'cd /repo/apps/mobile && npx tsc --noEmit' })], false)).toBe('tests'));
+  it('Bash that writes is not reading', () =>
+    expect(categorize([tool('Bash', { command: 'cat a.ts > b.ts' })], false)).toBe('talking'));
   it('Read, Grep, Glob, WebFetch, WebSearch are reading', () => {
     for (const n of ['Read', 'Grep', 'Glob', 'WebFetch', 'WebSearch']) {
       expect(categorize([tool(n)], false)).toBe('reading');
