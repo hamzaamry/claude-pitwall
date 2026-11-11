@@ -327,3 +327,22 @@ describe('reviewer calls, return flows and advisor triggers', () => {
     expect(s.triggers.stuck).toBe('done');
   });
 });
+
+describe('plugin agent names and log order', () => {
+  it('a plugin agent shows without the plugin prefix', () => {
+    const s = emptyState('s');
+    registerSubagent(s, 'a1', { agentType: 'pitwall:scout', description: 'find x' });
+    expect(s.agents.a1.role).toBe('scout');
+    applyEvent(s, 'main', asst({ blocks: [{ type: 'tool_use', id: 'sp', name: 'Agent', input: { description: 'find x', subagent_type: 'pitwall:scout' } }] }));
+    expect(s.log.map((l) => l.text)).toContain('main → scout: find x');
+  });
+
+  it('the log stays in time order even when events arrive out of order', () => {
+    const s = emptyState('s');
+    const t = (n: number) => `2026-11-11T10:00:0${n}.000Z`;
+    applyEvent(s, 'main', { kind: 'userPrompt', time: t(5), text: 'later' });
+    applyEvent(s, 'main', { kind: 'userPrompt', time: t(1), text: 'earlier' });
+    applyEvent(s, 'main', { kind: 'userPrompt', time: t(3), text: 'middle' });
+    expect(s.log.map((l) => l.text)).toEqual(['earlier', 'middle', 'later']);
+  });
+});

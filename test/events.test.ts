@@ -20,7 +20,7 @@ describe('applyPitwallEvent', () => {
   it('SubagentStart makes a working card with the agent type as role', () => {
     const s = emptyState('s');
     applyPitwallEvent(s, parseEvent(ev({ event: 'SubagentStart', agent: 'a1', agentType: 'pitwall:scout' }))!);
-    expect(s.agents.a1).toMatchObject({ role: 'pitwall:scout', status: 'working' });
+    expect(s.agents.a1).toMatchObject({ role: 'scout', status: 'working' });
   });
   it('SubagentStart does not wipe the title of a card the transcript already made', () => {
     const s = emptyState('s');

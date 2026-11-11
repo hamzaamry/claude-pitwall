@@ -34035,10 +34035,12 @@ var colors = {
   pill: "#161b22"
 };
 function colorForRole(role) {
+  role = role.replace(/^[a-z0-9_-]+:/i, "");
   if (role === "main") return colors.main;
   if (role === "you") return colors.muted;
   if (role === "advisor") return colors.advisor;
   if (role === "runner") return colors.runner;
+  if (role === "reviewer") return colors.advisor;
   return colors.sub;
 }
 
@@ -34383,7 +34385,7 @@ function Log({ entries, rows, width }) {
         fmtClock(e.time),
         "  "
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Text, { color: colorForRole(e.who), children: e.who.slice(0, 12).padEnd(12) }),
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Text, { color: colorForRole(e.who), children: (e.who.length > 11 ? e.who.slice(0, 10) + "\u2026" : e.who).padEnd(12) }),
       /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Text, { children: e.text })
     ] }, i))
   ] });
@@ -34541,6 +34543,9 @@ import { existsSync as existsSync4, readFileSync as readFileSync3 } from "node:f
 import { homedir as homedir4 } from "node:os";
 import { join as join4 } from "node:path";
 
+// src/role.ts
+var shortRole = (role) => role.replace(/^[a-z0-9_-]+:/i, "");
+
 // src/model/categories.ts
 var TEST_COMMAND = /\b(test|vitest|jest|pytest|tsc|lint|build|cargo check|go vet)\b/;
 var LOOKS_ONLY = /^(ls|cat|head|tail|grep|egrep|rg|find|tree|wc|stat|file|less|awk|sed -n|git (diff|log|show|status|grep|blame))\b/;
@@ -34573,7 +34578,9 @@ function agentFor(s, key) {
   return a;
 }
 function log(s, time, who, text) {
-  s.log.push({ time, who, text });
+  let i = s.log.length;
+  while (i > 0 && s.log[i - 1].time > time && time !== "") i--;
+  s.log.splice(i, 0, { time, who, text });
   if (s.log.length > LOG_CAP) s.log.splice(0, s.log.length - LOG_CAP);
 }
 var clip3 = (t, n) => t.length > n ? t.slice(0, n - 1) + "\u2026" : t;
@@ -34585,7 +34592,7 @@ function settle(s, a, status, time) {
 }
 function registerSubagent(s, key, meta) {
   const a = agentFor(s, key);
-  a.role = meta.agentType;
+  a.role = shortRole(meta.agentType);
   a.title = oneLine(meta.description);
   if (meta.pickedEffortModel) a.model = modelAlias(meta.pickedEffortModel);
   if (meta.toolUseId) a.toolUseId = meta.toolUseId;
@@ -34598,9 +34605,10 @@ function onToolUse(s, key, time, b) {
   if (b.name === "Agent") {
     const description = oneLine(String(b.input.description ?? ""));
     const type = String(b.input.subagent_type ?? "general-purpose");
+    const shown = shortRole(type);
     s.pendingFlows.push({ from: key, to: b.id, label: description, color: colorForRole(type), at: time });
     s.spawns.set(b.id, { from: key, type, askOpus: String(b.input.prompt ?? "").trimStart().startsWith("ASK-OPUS:") });
-    log(s, time, who, `${who} \u2192 ${type}: ${description}`);
+    log(s, time, who, `${who} \u2192 ${shown}: ${description}`);
   } else if (b.name === "Skill") {
     const name = String(b.input.skill ?? "");
     if (!name) return;

@@ -15,9 +15,11 @@ export const colors = {
 } as const;
 
 export function colorForRole(role: string): string {
+  role = role.replace(/^[a-z0-9_-]+:/i, '');
   if (role === 'main') return colors.main;
   if (role === 'you') return colors.muted;
   if (role === 'advisor') return colors.advisor;
   if (role === 'runner') return colors.runner;
+  if (role === 'reviewer') return colors.advisor;
   return colors.sub;
 }

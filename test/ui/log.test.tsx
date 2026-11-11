@@ -23,6 +23,10 @@ describe('Log', () => {
     expect(f).toContain('session log');
     expect(f).toContain('● live');
   });
+  it('keeps a gap between a long name and the text', () => {
+    const f = render(<Log entries={[{ time: '2026-11-11T10:00:00.000Z', who: 'a-very-long-agent-name', text: 'finished x' }]} rows={1} />).lastFrame()!;
+    expect(f).toMatch(/…\s+finished x|\S\s{2,}finished x/);
+  });
   it('says so when there is nothing yet', () => {
     expect(render(<Log entries={[]} rows={3} />).lastFrame()!).toContain('nothing yet');
   });

@@ -19,7 +19,7 @@ export function Log({ entries, rows, width }: { entries: LogEntry[]; rows: numbe
       {shown.map((e, i) => (
         <Text key={i} wrap="truncate-end">
           <Text color={colors.dim}>{fmtClock(e.time)}  </Text>
-          <Text color={colorForRole(e.who)}>{e.who.slice(0, 12).padEnd(12)}</Text>
+          <Text color={colorForRole(e.who)}>{(e.who.length > 11 ? e.who.slice(0, 10) + '…' : e.who).padEnd(12)}</Text>
           <Text>{e.text}</Text>
         </Text>
       ))}

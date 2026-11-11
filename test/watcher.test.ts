@@ -210,7 +210,7 @@ describe('SessionWatcher', () => {
       cpSync(FIXTURE, projectDir, { recursive: true });
       writeEvents([evLine({ event: 'SubagentStart', agent: 'live1', agentType: 'pitwall:scout' })]);
       const w = new SessionWatcher({ cwd: CWD, home });
-      expect(w.poll()!.agents.live1).toMatchObject({ role: 'pitwall:scout', status: 'working' });
+      expect(w.poll()!.agents.live1).toMatchObject({ role: 'scout', status: 'working' });
       appendFileSync(eventsFile(), evLine({ event: 'SubagentStop', agent: 'live1' }) + '\n' + evLine({ event: 'Nudge', kind: 'review-gate' }) + '\n');
       const s = w.poll()!;
       expect(s.agents.live1.status).toBe('done');

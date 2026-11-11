@@ -1,5 +1,6 @@
 import type { Block, TranscriptEvent } from '../transcript/types.js';
 import { oneLine } from '../oneLine.js';
+import { shortRole } from '../role.js';
 import { colorForRole, colors } from '../ui/theme.js';
 import { categorize, TEST_COMMAND } from './categories.js';
 import { freshTriggers, type AgentInfo, type Category, type SessionState } from './state.js';
@@ -21,7 +22,10 @@ function agentFor(s: SessionState, key: string): AgentInfo {
 }
 
 function log(s: SessionState, time: string, who: string, text: string): void {
-  s.log.push({ time, who, text });
+  // the transcripts, the subagent files and the events file are read one after another: keep time order
+  let i = s.log.length;
+  while (i > 0 && s.log[i - 1].time > time && time !== '') i--;
+  s.log.splice(i, 0, { time, who, text });
   if (s.log.length > LOG_CAP) s.log.splice(0, s.log.length - LOG_CAP);
 }
 
@@ -40,7 +44,7 @@ export function registerSubagent(
   meta: { agentType: string; description: string; pickedEffortModel?: string; finished?: boolean; toolUseId?: string },
 ): void {
   const a = agentFor(s, key);
-  a.role = meta.agentType;
+  a.role = shortRole(meta.agentType);
   a.title = oneLine(meta.description);
   if (meta.pickedEffortModel) a.model = modelAlias(meta.pickedEffortModel);
   if (meta.toolUseId) a.toolUseId = meta.toolUseId;
@@ -54,9 +58,10 @@ function onToolUse(s: SessionState, key: string, time: string, b: Extract<Block,
   if (b.name === 'Agent') {
     const description = oneLine(String(b.input.description ?? ''));
     const type = String(b.input.subagent_type ?? 'general-purpose');
+    const shown = shortRole(type);
     s.pendingFlows.push({ from: key, to: b.id, label: description, color: colorForRole(type), at: time });
     s.spawns.set(b.id, { from: key, type, askOpus: String(b.input.prompt ?? '').trimStart().startsWith('ASK-OPUS:') });
-    log(s, time, who, `${who} → ${type}: ${description}`);
+    log(s, time, who, `${who} → ${shown}: ${description}`);
   } else if (b.name === 'Skill') {
     const name = String(b.input.skill ?? '');
     if (!name) return;
