@@ -45,11 +45,37 @@ npm run build   # bundles dist/cli.js (committed, so installs need no build step
 
 ## Credits
 
-Ideas for the upcoming team phase come from [yukti](https://github.com/) , lz-advisor and advisor-opus (all MIT). The status line wrapping approach is in the spirit of [claude-hud](https://github.com/jarrodwatts/claude-hud).
+Ideas for the team come from [yukti](https://github.com/) , lz-advisor and advisor-opus (all MIT). The status line wrapping approach is in the spirit of [claude-hud](https://github.com/jarrodwatts/claude-hud).
 
-## Roadmap
+## The team (phase 2)
 
-**Phase 2, the team**: Sonnet as main, Haiku scouts and a test runner, the native Opus advisor, an Opus reviewer, hooks that enforce the rules at zero token cost, and `/pitwall:on`/`off`.
+The team cuts token use: a cheaper main model does the work, small models do the noisy work, and Opus only gives judgement.
+
+| Role | Model | Job |
+|---|---|---|
+| main | Sonnet | Talks to you; the only one that edits code. |
+| `pitwall:scout` | Haiku | One focused search question each; several in parallel; returns a short `file:line` map. |
+| `pitwall:runner` | Haiku | Runs tests, build or lint; returns only the failures. |
+| advisor | Opus (Claude Code's native advisor) | Guidance during the work. Claude decides when to call it. |
+| `pitwall:reviewer` | Opus | Final review of a big change, and your `/pitwall:ask-opus` questions. Never edits. |
+
+The team is **off by default**. Switch it on per session:
+
+- `/pitwall:on` — starts the team and loads the `workflow` skill.
+- `/pitwall:off` — stops it.
+- `/pitwall:ask-opus <question>` — asks the Opus reviewer, answer shown word for word.
+- `/pitwall:setup` — one-time, asks before each change: LIMITS box, the advisor model, and a cheaper `Explore` agent (a plugin cannot replace the built-in one, so setup installs `~/.claude/agents/Explore.md`).
+
+Hooks (they cost zero tokens, run from `hooks/hooks.json`, and never break your session: any error means they do nothing):
+
+- `event-log` — always on; one line per event in `~/.claude/pitwall/events/<session>.jsonl`, which the dashboard tails.
+- `read-cap` — team on only; a Read without a limit gets `limit: 400`, for files inside the project.
+- `same-error` — team on only; the same failing Bash result twice nudges Claude to consult the advisor.
+- `review-gate` — team on only; a big change (more than 2 files or 30 lines) makes Claude run the reviewer before finishing. It blocks at most once per change and never loops.
+
+The dashboard shows the team live: agent cards with their real model, labelled dots travelling both ways, the advisor's trigger states (`✓ ● ○ next`), reviewer verdicts, and `this task N · target ~2` for advisor and reviewer calls.
+
+How well it works is judged on real work: with the team on, your LIMITS box (5-hour and weekly %) should climb more slowly than with everything on Opus, with the same quality.
 
 ## Licence
 

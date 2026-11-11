@@ -71,6 +71,28 @@ describe('team commands', () => {
   });
 });
 
+describe('release 0.2.0', () => {
+  it('plugin.json, marketplace.json and package.json share one version', () => {
+    const v = json('package.json').version;
+    expect(json('.claude-plugin/plugin.json').version).toBe(v);
+    expect(json('.claude-plugin/marketplace.json').metadata.version).toBe(v);
+    expect(json('.claude-plugin/marketplace.json').plugins[0].source).toBe('./');
+    expect(v).toBe('0.2.0');
+  });
+  it('the team files exist', () => {
+    for (const f of ['agents/scout.md', 'agents/runner.md', 'agents/reviewer.md', 'skills/workflow/SKILL.md', 'hooks/hooks.json',
+      'hooks/lib/hook.mjs', 'hooks/event-log.mjs', 'hooks/read-cap.mjs', 'hooks/same-error.mjs', 'hooks/review-gate.mjs']) {
+      expect(existsSync(join(root, f)), f).toBe(true);
+    }
+  });
+  it('the README explains the team: on, off, ask-opus, off by default, the hooks', () => {
+    const r = readFileSync(join(root, 'README.md'), 'utf8');
+    for (const w of ['/pitwall:on', '/pitwall:off', '/pitwall:ask-opus', 'off by default', 'read-cap', 'same-error', 'review-gate', 'event-log']) {
+      expect(r, w).toContain(w);
+    }
+  });
+});
+
 describe('committed build', () => {
   it('dist/cli.js runs on its own, with no node_modules next to it', () => {
     const dir = mkdtempSync(join(tmpdir(), 'pitwall-bundle-'));

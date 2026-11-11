@@ -32888,7 +32888,7 @@ var Box_default = Box;
 
 // node_modules/ink/build/components/Text.js
 var import_react7 = __toESM(require_react(), 1);
-function Text({ color, backgroundColor, dimColor = false, bold = false, italic = false, underline = false, strikethrough = false, inverse = false, wrap = "wrap", children }) {
+function Text({ color, backgroundColor, dimColor = false, bold = false, italic = false, underline = false, strikethrough = false, inverse = false, wrap: wrap2 = "wrap", children }) {
   if (children === void 0 || children === null) {
     return null;
   }
@@ -32919,7 +32919,7 @@ function Text({ color, backgroundColor, dimColor = false, bold = false, italic =
     }
     return children2;
   };
-  return import_react7.default.createElement("ink-text", { style: { flexGrow: 0, flexShrink: 1, flexDirection: "row", textWrap: wrap }, internal_transform: transform }, children);
+  return import_react7.default.createElement("ink-text", { style: { flexGrow: 0, flexShrink: 1, flexDirection: "row", textWrap: wrap2 }, internal_transform: transform }, children);
 }
 
 // node_modules/ink/build/components/ErrorOverview.js
@@ -33889,6 +33889,7 @@ function formatReset(resetsAt, now) {
 var import_react22 = __toESM(require_react(), 1);
 
 // src/model/state.ts
+var freshTriggers = () => ({ planCheck: "todo", stuck: "todo", finalReview: "todo", askOpus: "todo" });
 var IDLE_AFTER_MS = 3e4;
 function statusAt(a, nowMs) {
   if (a.status === "working" && a.lastActivity && nowMs - Date.parse(a.lastActivity) > IDLE_AFTER_MS) return "idle";
@@ -33907,6 +33908,9 @@ function emptyState(sessionId) {
     pendingFlows: [],
     hasEdited: false,
     taskNo: 0,
+    nudges: {},
+    triggers: freshTriggers(),
+    spawns: /* @__PURE__ */ new Map(),
     msgInfo: /* @__PURE__ */ new Map(),
     seenToolIds: /* @__PURE__ */ new Set(),
     failedToolUseIds: /* @__PURE__ */ new Set()
@@ -33925,14 +33929,17 @@ function stepFlows(active, pending, layout) {
   let looked = pending.length;
   while (next.length < MAX_DOTS && looked-- > 0) {
     const flow = pending.shift();
-    const wireIndex = layout.wires.findIndex(
-      (w) => w.from === flow.from && (w.to === flow.to || w.toolUseId === flow.to)
-    );
+    const wireIndex = layout.wires.findIndex((w) => flow.back ? w.from === flow.to && (w.to === flow.from || w.toolUseId === flow.from) : w.from === flow.from && (w.to === flow.to || w.toolUseId === flow.to));
     if (wireIndex !== -1) next.push({ ...flow, wireIndex, pos: 0 });
     else if ((flow.tries ?? 0) + 1 < MAX_TRIES) retry.push({ ...flow, tries: (flow.tries ?? 0) + 1 });
   }
   pending.unshift(...retry);
   return next;
+}
+function dotCell(f, layout) {
+  const cells = layout.wires[f.wireIndex]?.cells;
+  if (!cells) return void 0;
+  return cells[f.back ? cells.length - 1 - f.pos : f.pos];
 }
 
 // src/ui/format.ts
@@ -34146,7 +34153,7 @@ function drawWireLabels(g, layout) {
 }
 function drawDots(g, layout, active) {
   for (const f of active) {
-    const cell = layout.wires[f.wireIndex]?.cells[f.pos];
+    const cell = dotCell(f, layout);
     if (!cell) continue;
     put(g, cell[0], cell[1], "\u25CF", f.color);
     const label = ` ${clip(f.label, 22)} `;
@@ -34154,7 +34161,18 @@ function drawDots(g, layout, active) {
     put(g, right ? cell[0] + 1 : cell[0] - label.length, cell[1], label, colors.bright, true, colors.pill);
   }
 }
-var TRIGGERS = ["plan check", "stuck", "final review", "/ask-opus"];
+var TRIGGERS = [
+  ["plan check", "planCheck"],
+  ["stuck", "stuck"],
+  ["final review", "finalReview"],
+  ["/ask-opus", "askOpus"]
+];
+var MARK = {
+  todo: { text: "\u25CB", color: colors.dim },
+  on: { text: "\u25CF", color: colors.advisor },
+  done: { text: "\u2713", color: colors.done },
+  next: { text: "next", color: colors.warning }
+};
 function drawAdvisor(g, b, state) {
   const calls = state.advisorCalls;
   const configured = calls.length > 0;
@@ -34171,7 +34189,10 @@ function drawAdvisor(g, b, state) {
   if (configured) put(g, b.x + 2, b.y + 3, clip(`${fmtTokens(calls.reduce((n, c) => n + c.tokens, 0))} tokens`, b.w - 4), colors.dim);
   for (let x = b.x + 1; x < b.x + b.w - 1; x++) put(g, x, b.y + 4, "\u2500", colors.frame);
   put(g, b.x + 2, b.y + 5, "called when", colors.dim);
-  TRIGGERS.forEach((t, i) => putSplit(g, b, 7 + i, t, color, "\u25CB", color));
+  TRIGGERS.forEach(([label, key], i) => {
+    const m = MARK[state.triggers[key]];
+    putSplit(g, b, 7 + i, label, color, m.text, m.color);
+  });
   put(g, b.x + 2, b.y + Math.max(12, b.h - 3), "on call", colors.dim);
   put(g, b.x + 2, b.y + Math.max(13, b.h - 2), clip("never edits code", b.w - 4), colors.dim);
 }
@@ -34390,6 +34411,22 @@ function percentages(cats) {
   }
   return out;
 }
+var TARGET_CALLS = 2;
+function wrap(text, width, maxLines) {
+  const lines = [];
+  let cur = "";
+  for (const word of text.split(" ")) {
+    if (cur && (cur + " " + word).length > width) {
+      lines.push(cur);
+      cur = word.slice(0, width);
+    } else cur = cur ? cur + " " + word : word.slice(0, width);
+  }
+  if (cur) lines.push(cur);
+  if (lines.length <= maxLines) return lines;
+  const cut = lines.slice(0, maxLines);
+  cut[maxLines - 1] = clip2(cut[maxLines - 1] + "\u2026", width);
+  return cut;
+}
 var clip2 = (s, n) => s.length > n ? s.slice(0, n - 1) + "\u2026" : s;
 var bar2 = (pct) => {
   const filled = Math.max(0, Math.min(10, Math.round(pct / 10)));
@@ -34423,6 +34460,7 @@ function Stats({ state, limits, now, width = STATS_WIDTH }) {
   const pct = percentages(state.categories);
   const calls = state.advisorCalls;
   const last = calls[calls.length - 1];
+  const thisTask = calls.filter((c) => c.taskNo === state.taskNo).length;
   return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Box_default, { flexDirection: "column", width, children: [
     /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Section, { width, title: "LIMITS", children: limits === null ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.dim, children: "run /pitwall:setup to see limits" }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
       limits.contextPct !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(LimitRow, { label: "context", pct: limits.contextPct, color: limits.contextPct >= 80 ? colors.warning : colors.main }) : null,
@@ -34443,30 +34481,38 @@ function Stats({ state, limits, now, width = STATS_WIDTH }) {
         }
       ) : null
     ] }) }),
-    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Section, { width, title: "ADVISOR", titleColor: colors.advisor, right: `${state.advisorModel ?? "opus"} \xB7 ${calls.length} call${calls.length === 1 ? "" : "s"}`, children: calls.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.dim, children: "not called yet" }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { color: colors.dim, children: [
-        fmtTokens(calls.reduce((n, c) => n + c.tokens, 0)),
-        " tokens"
-      ] }),
-      calls.slice(-4).map((c, i) => /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { wrap: "truncate-end", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Section, { width, title: "ADVISOR", titleColor: colors.advisor, right: `${state.advisorModel ?? "opus"} \xB7 ${calls.length} call${calls.length === 1 ? "" : "s"}`, children: [
+      state.advisorModel || calls.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { color: thisTask > TARGET_CALLS ? colors.warning : colors.dim, children: [
+        "this task ",
+        thisTask,
+        " \xB7 target ~",
+        TARGET_CALLS
+      ] }) : null,
+      calls.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.dim, children: "not called yet" }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
         /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { color: colors.dim, children: [
-          fmtClock(c.time),
-          "  "
+          fmtTokens(calls.reduce((n, c) => n + c.tokens, 0)),
+          " tokens"
         ] }),
-        c.why,
-        c.result ? /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { color: colors.advisor, children: [
-          "  [",
-          c.result,
-          "]"
-        ] }) : null,
-        /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { color: colors.dim, children: [
-          "  ",
-          fmtTokens(c.tokens)
-        ] })
-      ] }, i)),
-      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.dim, children: "latest advice" }),
-      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.bright, children: clip2(last.source === "reviewer" && last.text ? last.text : "\u{1F512} native advice (encrypted)", inner) })
-    ] }) }),
+        calls.slice(-4).map((c, i) => /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { wrap: "truncate-end", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { color: colors.dim, children: [
+            fmtClock(c.time),
+            "  "
+          ] }),
+          c.why,
+          c.result ? /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { color: colors.advisor, children: [
+            "  [",
+            c.result,
+            "]"
+          ] }) : null,
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { color: colors.dim, children: [
+            "  ",
+            fmtTokens(c.tokens)
+          ] })
+        ] }, i)),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.dim, children: "latest advice" }),
+        wrap(last.source === "reviewer" && last.text ? last.text : "\u{1F512} native advice (encrypted)", inner, 5).map((l, i) => /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.bright, children: l }, i))
+      ] })
+    ] }),
     /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Section, { width, title: "WHERE TOKENS WENT \xB7 this task", children: CATEGORIES.map((c) => /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { children: [
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { children: width < 38 ? LABEL[c].slice(0, 8).padEnd(9) : LABEL[c].padEnd(14) }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: c === "coding" ? colors.done : colors.muted, children: bar2(pct[c]) }),
@@ -34491,7 +34537,9 @@ function Stats({ state, limits, now, width = STATS_WIDTH }) {
 }
 
 // src/watcher.ts
-import { readFileSync as readFileSync3 } from "node:fs";
+import { existsSync as existsSync4, readFileSync as readFileSync3 } from "node:fs";
+import { homedir as homedir4 } from "node:os";
+import { join as join4 } from "node:path";
 
 // src/model/categories.ts
 var TEST_COMMAND = /\b(test|vitest|jest|pytest|tsc|lint|build|cargo check|go vet)\b/;
@@ -34551,6 +34599,7 @@ function onToolUse(s, key, time, b) {
     const description = oneLine(String(b.input.description ?? ""));
     const type = String(b.input.subagent_type ?? "general-purpose");
     s.pendingFlows.push({ from: key, to: b.id, label: description, color: colorForRole(type), at: time });
+    s.spawns.set(b.id, { from: key, type, askOpus: String(b.input.prompt ?? "").trimStart().startsWith("ASK-OPUS:") });
     log(s, time, who, `${who} \u2192 ${type}: ${description}`);
   } else if (b.name === "Skill") {
     const name = String(b.input.skill ?? "");
@@ -34569,6 +34618,37 @@ function onToolUse(s, key, time, b) {
     log(s, time, who, `ran ${clip3(String(b.input.command), 50)}`);
   }
 }
+var VERDICT = /^(approved|needs info|fix)\b/i;
+var isReviewer = (type) => /(^|:)reviewer$/.test(type);
+var firstLine = (t) => t.split("\n").map((l) => l.trim()).find(Boolean) ?? "";
+function onAgentResult(s, e) {
+  const spawn = s.spawns.get(e.toolUseId);
+  if (!spawn) return;
+  const card = Object.values(s.agents).find((a) => a.toolUseId === e.toolUseId);
+  s.pendingFlows.push({
+    from: card?.key ?? e.toolUseId,
+    to: spawn.from,
+    back: true,
+    at: e.time,
+    label: oneLine(firstLine(e.text)).slice(0, 24),
+    color: colorForRole(spawn.type)
+  });
+  if (!isReviewer(spawn.type) || e.isError) return;
+  const verdict = firstLine(e.text).match(VERDICT)?.[1].toLowerCase();
+  const askOpus = spawn.askOpus;
+  s.advisorCalls.push({
+    time: e.time,
+    source: "reviewer",
+    why: askOpus ? "ask-opus" : "final review",
+    result: askOpus ? void 0 : verdict,
+    text: oneLine(e.text),
+    tokens: card?.tokens ?? 0,
+    taskNo: s.taskNo
+  });
+  if (askOpus) s.triggers.askOpus = "done";
+  else s.triggers.finalReview = "done";
+  log(s, e.time, "reviewer", askOpus ? "answered" : `verdict: ${verdict ?? "unclear"}`);
+}
 var EDIT_TOOLS = ["Edit", "Write", "NotebookEdit"];
 function slim(b) {
   if (b.type !== "tool_use") return b;
@@ -34586,12 +34666,14 @@ function applyEvent(s, agentKey, e) {
       s.currentTask = e.text.length > 60 ? e.text.slice(0, 60) + "\u2026" : e.text;
       s.hasEdited = false;
       s.taskNo += 1;
+      s.triggers = freshTriggers();
       log(s, e.time, "you", clip3(e.text, 80));
       s.categories = { coding: 0, reading: 0, talking: 0, planning: 0, tests: 0 };
     }
     return s;
   }
   if (e.kind === "toolResult") {
+    onAgentResult(s, e);
     if (e.isError) {
       s.failedToolUseIds.add(e.toolUseId);
       const spawned = Object.values(s.agents).find((a) => a.toolUseId === e.toolUseId);
@@ -34612,7 +34694,9 @@ function applyEvent(s, agentKey, e) {
     if (e.advisorUsage) {
       const u = e.advisorUsage;
       const tokens = u.input + u.output + u.cacheRead + u.cacheWrite;
-      s.advisorCalls.push({ time: e.time, source: "native", why: "native advice", tokens });
+      s.advisorCalls.push({ time: e.time, source: "native", why: "native advice", tokens, taskNo: s.taskNo });
+      if (!s.hasEdited && s.triggers.planCheck === "todo") s.triggers.planCheck = "done";
+      if (s.triggers.stuck === "on") s.triggers.stuck = "done";
       s.pendingFlows.push({ from: agentKey, to: "advisor", label: "advice \u{1F512}", color: colors.advisor, at: e.time });
       log(s, e.time, "advisor", "advice \u{1F512}");
     }
@@ -34628,7 +34712,10 @@ function applyEvent(s, agentKey, e) {
     info.blocks.push(slim(b));
     if (b.type === "tool_use") {
       onToolUse(s, agentKey, e.time, b);
-      if (agentKey === "main" && EDIT_TOOLS.includes(b.name)) s.hasEdited = true;
+      if (agentKey === "main" && EDIT_TOOLS.includes(b.name)) {
+        s.hasEdited = true;
+        if (s.triggers.finalReview === "todo") s.triggers.finalReview = "next";
+      }
     }
   }
   const category = categorize(info.blocks, agentKey === "main" && s.hasEdited);
@@ -34643,28 +34730,67 @@ function applyEvent(s, agentKey, e) {
   return s;
 }
 
-// src/transcript/locate.ts
-import { existsSync as existsSync2, readdirSync, statSync } from "node:fs";
+// src/events.ts
+function parseEvent(line) {
+  try {
+    const d = JSON.parse(line);
+    if (!d || typeof d !== "object" || Array.isArray(d)) return null;
+    if (typeof d.event !== "string" || typeof d.session !== "string") return null;
+    return d;
+  } catch {
+    return null;
+  }
+}
+function applyPitwallEvent(s, e) {
+  if (e.session !== s.sessionId) return;
+  if (e.event === "SubagentStart" && e.agent) {
+    if (!s.agents[e.agent]) registerSubagent(s, e.agent, { agentType: e.agentType ?? "agent", description: "" });
+    const a = s.agents[e.agent];
+    if (a.status !== "failed" && a.status !== "done") a.status = "working";
+  } else if (e.event === "SubagentStop" && e.agent) {
+    const a = s.agents[e.agent];
+    if (a) settle(s, a, "done", e.t);
+  } else if (e.event === "Nudge" && e.kind) {
+    s.nudges[e.kind] = e.t;
+    if (e.kind === "same-error") {
+      const last = s.advisorCalls[s.advisorCalls.length - 1];
+      s.triggers.stuck = last && Date.parse(last.time) >= Date.parse(e.t) ? "done" : "on";
+    }
+  }
+}
+
+// src/team.ts
+import { existsSync as existsSync2 } from "node:fs";
 import { homedir as homedir2 } from "node:os";
 import { join as join2 } from "node:path";
-function projectDirFor(cwd2, home = homedir2()) {
-  const base = join2(home, ".claude", "projects");
+var safe = (s) => String(s ?? "").replace(/[^A-Za-z0-9_-]/g, "");
+var pitwallHome = () => process.env.PITWALL_HOME || join2(homedir2(), ".claude", "pitwall");
+var teamKey = (input) => safe(input.sessionId ?? "");
+var teamFlagPath = (key, home = pitwallHome()) => join2(home, "team", key);
+var isTeamOn = (key, home = pitwallHome()) => key !== "" && existsSync2(teamFlagPath(key, home));
+
+// src/transcript/locate.ts
+import { existsSync as existsSync3, readdirSync, statSync } from "node:fs";
+import { homedir as homedir3 } from "node:os";
+import { join as join3 } from "node:path";
+function projectDirFor(cwd2, home = homedir3()) {
+  const base = join3(home, ".claude", "projects");
   const slug = cwd2.replace(/[^a-zA-Z0-9]/g, "-");
-  if (slug.length <= 200) return join2(base, slug);
+  if (slug.length <= 200) return join3(base, slug);
   const prefix = slug.slice(0, 200);
   try {
     const hit = readdirSync(base).find((n) => n.startsWith(prefix));
-    if (hit) return join2(base, hit);
+    if (hit) return join3(base, hit);
   } catch {
   }
-  return join2(base, prefix);
+  return join3(base, prefix);
 }
 function listSessions(projectDir) {
-  if (!existsSync2(projectDir)) return [];
+  if (!existsSync3(projectDir)) return [];
   const out = [];
   for (const name of readdirSync(projectDir)) {
     if (!name.endsWith(".jsonl")) continue;
-    const file = join2(projectDir, name);
+    const file = join3(projectDir, name);
     try {
       out.push({ id: name.slice(0, -".jsonl".length), file, mtime: statSync(file).mtimeMs });
     } catch {
@@ -34673,12 +34799,12 @@ function listSessions(projectDir) {
   return out.sort((a, b) => b.mtime - a.mtime);
 }
 function subagentFiles(projectDir, sessionId) {
-  const dir = join2(projectDir, sessionId, "subagents");
-  if (!existsSync2(dir)) return [];
+  const dir = join3(projectDir, sessionId, "subagents");
+  if (!existsSync3(dir)) return [];
   return readdirSync(dir).filter((n) => n.startsWith("agent-") && n.endsWith(".jsonl")).sort().map((n) => ({
     key: n.slice("agent-".length, -".jsonl".length),
-    file: join2(dir, n),
-    metaFile: join2(dir, n.replace(/\.jsonl$/, ".meta.json"))
+    file: join3(dir, n),
+    metaFile: join3(dir, n.replace(/\.jsonl$/, ".meta.json"))
   }));
 }
 
@@ -34813,11 +34939,13 @@ var LIVE_FLOW_MS = 1e4;
 var SessionWatcher = class {
   projectDir;
   pinned;
+  pitwallDir;
   current;
   known = /* @__PURE__ */ new Set();
   ctxs = /* @__PURE__ */ new Map();
   constructor(opts) {
     this.projectDir = projectDirFor(opts.cwd, opts.home);
+    this.pitwallDir = opts.pitwallHome ?? process.env.PITWALL_HOME ?? join4(opts.home ?? homedir4(), ".claude", "pitwall");
     this.pinned = opts.sessionId;
   }
   get dir() {
@@ -34841,7 +34969,8 @@ var SessionWatcher = class {
     this.current = target.id;
     let ctx = this.ctxs.get(target.id);
     if (!ctx) {
-      ctx = { state: emptyState(target.id), mainTail: new FileTail(target.file), subs: /* @__PURE__ */ new Map() };
+      const eventsFile = join4(this.pitwallDir, "events", `${target.id}.jsonl`);
+      ctx = { state: emptyState(target.id), mainTail: new FileTail(target.file), eventsFile, eventsTail: new FileTail(eventsFile), subs: /* @__PURE__ */ new Map() };
       this.ctxs.set(target.id, ctx);
     }
     const state = ctx.state;
@@ -34855,6 +34984,11 @@ var SessionWatcher = class {
       if (!sub.finished) sub.finished = this.readMeta(state, f.key, f.metaFile);
       for (const line of sub.tail.readNew()) this.apply(state, f.key, line);
     }
+    for (const line of ctx.eventsTail.readNew()) {
+      const e = parseEvent(line);
+      if (e) applyPitwallEvent(state, e);
+    }
+    state.teamOn = existsSync4(ctx.eventsFile) ? isTeamOn(teamKey({ sessionId: target.id }), this.pitwallDir) : void 0;
     const cutoff = Date.now() - LIVE_FLOW_MS;
     for (let i = state.pendingFlows.length - 1; i >= 0; i--) {
       const at = state.pendingFlows[i].at;
@@ -34940,7 +35074,7 @@ function App2({ cwd: cwd2, home, sessionId, width, height, pollMs = 500, tickMs 
   const graphHeight = Math.max(16, size.height - headerHeight(state, size.width) - logHeight(LOG_ROWS) - 1);
   const limits = readLimits(state.sessionId, home);
   return /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(Box_default, { flexDirection: "column", width: size.width, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Header, { state, now, width: size.width }),
+    /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Header, { state, teamOn: state.teamOn, now, width: size.width }),
     /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(Box_default, { children: [
       /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(Box_default, { flexDirection: "column", children: [
         /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Graph, { state, width: graphWidth, height: graphHeight, tickMs }),
