@@ -95,6 +95,14 @@ describe('Header', () => {
     expect(f).toContain('╭');
   });
 
+  it('counts a reviewer call by the tokens of its live card', () => {
+    const s = sample();
+    s.agents.rv = { key: 'rv', role: 'reviewer', model: 'opus', title: 'review', tokens: 30_000, status: 'done', toolUseId: 'r1' };
+    s.advisorCalls.push({ time: 't', source: 'reviewer', why: 'final review', tokens: 0, taskNo: 0, toolUseId: 'r1' });
+    const f = render(<Header state={s} teamOn={true} now={T0} width={150} />).lastFrame()!;
+    expect(f).toContain('+ advisor 30k');
+  });
+
   it('does not crash with no agents', () => {
     const f = render(<Header state={emptyState('s')} teamOn={false} now={T0} width={50} />).lastFrame()!;
     expect(f).toContain('pitwall');

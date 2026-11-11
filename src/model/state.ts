@@ -4,7 +4,7 @@ export type Category = 'coding' | 'reading' | 'talking' | 'planning' | 'tests';
 export type AgentInfo = { key: string; role: string; model: string; effort?: string; title: string;
   tokens: number; status: 'working' | 'idle' | 'done' | 'failed'; startedAt?: string; finishedAt?: string;
   toolUseId?: string; lastActivity?: string };
-export type AdvisorCall = { time: string; source: 'native' | 'reviewer'; why: string; result?: string; tokens: number; text?: string; taskNo: number };
+export type AdvisorCall = { time: string; source: 'native' | 'reviewer'; why: string; result?: string; tokens: number; text?: string; taskNo: number; toolUseId?: string };
 export type Triggers = {
   planCheck: 'todo' | 'done'; stuck: 'todo' | 'on' | 'done'; finalReview: 'todo' | 'next' | 'done'; askOpus: 'todo' | 'done';
 };
@@ -47,4 +47,10 @@ export function emptyState(sessionId: string): SessionState {
     log: [], pendingFlows: [], hasEdited: false, taskNo: 0, nudges: {}, triggers: freshTriggers(), spawns: new Map(),
     msgInfo: new Map(), seenToolIds: new Set(), failedToolUseIds: new Set(),
   };
+}
+
+/** A reviewer call's tokens are its card's tokens, read now: the card may not have existed (or been complete) when the answer arrived. */
+export function advisorCallTokens(s: SessionState, c: AdvisorCall): number {
+  const card = c.toolUseId ? Object.values(s.agents).find((a) => a.toolUseId === c.toolUseId) : undefined;
+  return card?.tokens ?? c.tokens;
 }

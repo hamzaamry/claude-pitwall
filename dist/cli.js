@@ -33916,6 +33916,10 @@ function emptyState(sessionId) {
     failedToolUseIds: /* @__PURE__ */ new Set()
   };
 }
+function advisorCallTokens(s, c) {
+  const card = c.toolUseId ? Object.values(s.agents).find((a) => a.toolUseId === c.toolUseId) : void 0;
+  return card?.tokens ?? c.tokens;
+}
 
 // src/oneLine.ts
 var oneLine = (t) => t.replace(/\s+/g, " ").trim();
@@ -34188,7 +34192,7 @@ function drawAdvisor(g, b, state) {
     clip(configured ? `\u25CF ${calls.length} call${calls.length === 1 ? "" : "s"}` : state.advisorModel ? "\u25CB no calls yet" : "\u25CB not configured", b.w - 4),
     configured ? colors.bright : colors.dim
   );
-  if (configured) put(g, b.x + 2, b.y + 3, clip(`${fmtTokens(calls.reduce((n, c) => n + c.tokens, 0))} tokens`, b.w - 4), colors.dim);
+  if (configured) put(g, b.x + 2, b.y + 3, clip(`${fmtTokens(calls.reduce((n, c) => n + advisorCallTokens(state, c), 0))} tokens`, b.w - 4), colors.dim);
   for (let x = b.x + 1; x < b.x + b.w - 1; x++) put(g, x, b.y + 4, "\u2500", colors.frame);
   put(g, b.x + 2, b.y + 5, "called when", colors.dim);
   TRIGGERS.forEach(([label, key], i) => {
@@ -34295,7 +34299,7 @@ function buildChips(state, now) {
     model: state.advisorModel ?? "opus",
     active: !!last && now - Date.parse(last.time) < ADVISOR_RECENT_MS,
     status: calls.length ? `${calls.length} call${calls.length === 1 ? "" : "s"}` : state.advisorModel ? "no calls yet" : "not configured",
-    tokens: calls.reduce((n, c) => n + c.tokens, 0)
+    tokens: calls.reduce((n, c) => n + advisorCallTokens(state, c), 0)
   });
   const byRole = /* @__PURE__ */ new Map();
   for (const a of Object.values(state.agents)) {
@@ -34326,7 +34330,7 @@ function headerHeight(state, width) {
 function Header({ state, teamOn, now, width }) {
   const agents = Object.values(state.agents);
   const total = agents.reduce((n, a) => n + a.tokens, 0);
-  const advisorTokens = state.advisorCalls.reduce((n, c) => n + c.tokens, 0);
+  const advisorTokens = state.advisorCalls.reduce((n, c) => n + advisorCallTokens(state, c), 0);
   const elapsed = state.startedAt ? fmtElapsed(now - Date.parse(state.startedAt)) : "0:00";
   const compact = width < 100;
   const columns = columnsFor(width);
@@ -34492,7 +34496,7 @@ function Stats({ state, limits, now, width = STATS_WIDTH }) {
       ] }) : null,
       calls.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.dim, children: "not called yet" }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
         /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { color: colors.dim, children: [
-          fmtTokens(calls.reduce((n, c) => n + c.tokens, 0)),
+          fmtTokens(calls.reduce((n, c) => n + advisorCallTokens(state, c), 0)),
           " tokens"
         ] }),
         calls.slice(-4).map((c, i) => /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { wrap: "truncate-end", children: [
@@ -34508,7 +34512,7 @@ function Stats({ state, limits, now, width = STATS_WIDTH }) {
           ] }) : null,
           /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { color: colors.dim, children: [
             "  ",
-            fmtTokens(c.tokens)
+            fmtTokens(advisorCallTokens(state, c))
           ] })
         ] }, i)),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.dim, children: "latest advice" }),
@@ -34651,7 +34655,8 @@ function onAgentResult(s, e) {
     result: askOpus ? void 0 : verdict,
     text: oneLine(e.text),
     tokens: card?.tokens ?? 0,
-    taskNo: s.taskNo
+    taskNo: s.taskNo,
+    toolUseId: e.toolUseId
   });
   if (askOpus) s.triggers.askOpus = "done";
   else s.triggers.finalReview = "done";

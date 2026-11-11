@@ -19,6 +19,9 @@ describe('workflow skill', () => {
     expect(order.every((i) => i >= 0), JSON.stringify(order)).toBe(true);
     expect([...order].sort((x, y) => x - y)).toEqual(order);
   });
+  it('does not assume an advisor exists', () => {
+    expect(skill.body.toLowerCase()).toContain('if you have no advisor');
+  });
   it('has the behaviour rules and the reconcile rule', () => {
     const b = skill.body.toLowerCase();
     for (const w of ['parallel', 'one reconcile call', 'no recaps', 'slices', 'never silently ignore']) expect(b, w).toContain(w);

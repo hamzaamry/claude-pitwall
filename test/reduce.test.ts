@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { emptyState, statusAt } from '../src/model/state.js';
+import { advisorCallTokens, emptyState, statusAt } from '../src/model/state.js';
 import { applyEvent, registerSubagent } from '../src/model/reduce.js';
 import { applyPitwallEvent } from '../src/events.js';
 import type { TranscriptEvent } from '../src/transcript/types.js';
@@ -344,5 +344,23 @@ describe('plugin agent names and log order', () => {
     applyEvent(s, 'main', { kind: 'userPrompt', time: t(1), text: 'earlier' });
     applyEvent(s, 'main', { kind: 'userPrompt', time: t(3), text: 'middle' });
     expect(s.log.map((l) => l.text)).toEqual(['earlier', 'middle', 'later']);
+  });
+});
+
+describe('reviewer tokens come from the live card', () => {
+  it('a reviewer call made before its card existed still shows the card tokens later', () => {
+    const s = emptyState('s');
+    applyEvent(s, 'main', asst({ messageId: 'sp', blocks: [{ type: 'tool_use', id: 'r1', name: 'Agent', input: { description: 'review', subagent_type: 'pitwall:reviewer', prompt: 'p' } }] }));
+    applyEvent(s, 'main', { kind: 'toolResult', time: 't', toolUseId: 'r1', isError: false, text: 'approved' });
+    expect(s.advisorCalls[0].toolUseId).toBe('r1');
+    expect(advisorCallTokens(s, s.advisorCalls[0])).toBe(0);
+    registerSubagent(s, 'a9', { agentType: 'pitwall:reviewer', description: 'review', toolUseId: 'r1' });
+    applyEvent(s, 'a9', asst({ messageId: 'rv1' }));
+    expect(advisorCallTokens(s, s.advisorCalls[0])).toBe(115);
+  });
+  it('a native call keeps its own tokens', () => {
+    const s = emptyState('s');
+    applyEvent(s, 'main', asst({ messageId: 'adv', advisorUsage: { input: 100, output: 10, cacheRead: 0, cacheWrite: 0 } }));
+    expect(advisorCallTokens(s, s.advisorCalls[0])).toBe(110);
   });
 });

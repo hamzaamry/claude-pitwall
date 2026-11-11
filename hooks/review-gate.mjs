@@ -1,72 +1,52 @@
 // Team hook: before main finishes a BIG change, make it run the reviewer first.
-//   review-gate.mjs mark  (SubagentStop): when the reviewer stops, remember the change it saw.
-//   review-gate.mjs gate  (Stop):         block (exit 2) once per change that was not reviewed.
-// It can never loop: it ignores stop_hook_active and blocks each change fingerprint at most once.
-import { execFileSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { readFileSync, statSync } from 'node:fs';
+//   review-gate.mjs snapshot (UserPromptSubmit): remember the working tree at the first prompt of the team session.
+//   review-gate.mjs mark     (SubagentStop):     when the reviewer stops, remember the tree it saw.
+//   review-gate.mjs gate     (Stop):             block (exit 2) when main edited this turn and the tree changed by more
+//                                                than 2 files or 30 lines since the last checkpoint.
+// A block is also a checkpoint, so it can never loop; stop_hook_active is respected too. Any error means no block.
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { appendEvent, readInput, readState, teamOn, writeState } from './lib/hook.mjs';
+import { appendEvent, pitwallHome, readInput, readState, teamOn, writeState } from './lib/hook.mjs';
+import { delta, isBig, snapshot } from './lib/changes.mjs';
 
-const BIG_FILES = 2;
-const BIG_LINES = 30;
-const MAX_HASH_BYTES = 1_000_000;
-
-const git = (cwd, args) => execFileSync('git', ['--no-pager', '-c', 'core.quotepath=off', '-C', cwd, ...args],
-  { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024, timeout: 10_000 });
-
-/** What changed since HEAD: tracked diff plus untracked, non-ignored files. null outside git or on any git error. */
-export function changeFingerprint(cwd) {
-  try {
-    git(cwd, ['rev-parse', '--is-inside-work-tree']);
-    const numstat = git(cwd, ['diff', 'HEAD', '--numstat']).split('\n').filter(Boolean);
-    const untracked = git(cwd, ['ls-files', '--others', '--exclude-standard']).split('\n').filter(Boolean);
-    let lines = 0;
-    for (const l of numstat) { const [a, d] = l.split('\t'); lines += (Number(a) || 0) + (Number(d) || 0); }
-    const hash = createHash('sha1').update(git(cwd, ['diff', 'HEAD']));
-    for (const f of untracked) {
-      try {
-        const p = join(cwd, f);
-        const size = statSync(p).size;
-        const text = size <= MAX_HASH_BYTES ? readFileSync(p, 'utf8') : '';
-        lines += text ? text.split('\n').length - 1 : 0;
-        hash.update(f).update(String(size)).update(text);
-      } catch { /* a file that vanished is not a change we can judge */ }
-    }
-    return { fingerprint: hash.digest('hex'), files: numstat.length + untracked.length, lines };
-  } catch { return null; }
-}
-
-export const isBig = (c) => c.files > BIG_FILES || c.lines > BIG_LINES;
-
-const isReviewer = (type) => /(^|:)reviewer$/.test(String(type ?? ''));
+const EDIT_TOOLS = new Set(['Edit', 'Write', 'NotebookEdit']);
 const REASON = 'pitwall plugin hook (installed by the user): this is a big change. Run the pitwall:reviewer agent on it before finishing.';
+const isReviewer = (type) => /(^|:)reviewer$/.test(String(type ?? ''));
 
-function mark(input) {
-  if (!isReviewer(input.agent_type) || !input.session_id) return;
-  const c = changeFingerprint(input.cwd || process.cwd());
-  if (c) writeState(input.session_id, { ...readState(input.session_id), reviewed: c.fingerprint });
+/** Did main (not a subagent) call an editing tool since the last prompt? Read from the event-log hook's file. */
+function mainEditedThisTurn(sessionId) {
+  const file = join(pitwallHome(), 'events', `${sessionId.replace(/[^A-Za-z0-9_-]/g, '')}.jsonl`);
+  if (!existsSync(file)) return false;
+  const events = readFileSync(file, 'utf8').split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+  let from = events.length - 1;
+  while (from >= 0 && events[from].event !== 'UserPromptSubmit') from--;
+  return events.slice(from + 1).some((e) => e.event === 'PostToolUse' && EDIT_TOOLS.has(e.tool) && !e.agent);
 }
 
-/** Returns the reason to block with, or undefined. */
+function checkpoint(input) {
+  const cur = snapshot(input.cwd || process.cwd());
+  if (cur) writeState(input.session_id, { ...readState(input.session_id), base: cur });
+  return cur;
+}
+
 function gate(input) {
-  if (!input.session_id || input.stop_hook_active === true || !teamOn(input)) return;
-  const c = changeFingerprint(input.cwd || process.cwd());
-  if (!c || !isBig(c)) return;
-  const state = readState(input.session_id);
-  if (c.fingerprint === state.reviewed || c.fingerprint === state.blocked) return;
-  writeState(input.session_id, { ...state, blocked: c.fingerprint });
+  if (!input.session_id || input.stop_hook_active === true || !teamOn(input) || !mainEditedThisTurn(input.session_id)) return;
+  const cur = snapshot(input.cwd || process.cwd());
+  if (!cur) return;
+  const base = readState(input.session_id).base ?? {};
+  if (!isBig(delta(base, cur))) return;
+  checkpoint(input);
   appendEvent(input.session_id, { t: new Date().toISOString(), event: 'Nudge', session: input.session_id, kind: 'review-gate' });
   return REASON;
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
-  let reason;
-  try {
-    const input = readInput();
-    if (process.argv[2] === 'mark') mark(input); else reason = gate(input);
-  } catch { reason = undefined; }
-  if (reason) { process.stderr.write(reason); process.exit(2); }
-  process.exit(0);
-}
+let reason;
+try {
+  const input = readInput();
+  const mode = process.argv[2];
+  if (mode === 'snapshot') { if (input.session_id && teamOn(input) && !readState(input.session_id).base) checkpoint(input); }
+  else if (mode === 'mark') { if (input.session_id && isReviewer(input.agent_type)) checkpoint(input); }
+  else reason = gate(input);
+} catch { reason = undefined; }
+if (reason) { process.stderr.write(reason); process.exit(2); }
+process.exit(0);

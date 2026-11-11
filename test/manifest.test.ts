@@ -47,6 +47,11 @@ describe('team commands', () => {
     expect(t).toContain('team');
     expect(t).toContain('pitwall:workflow');
   });
+  it('on: does not promise an advisor it cannot check', () => {
+    const t = cmd('on');
+    expect(t).toContain('advisorModel');
+    expect(t).toMatch(/advisor (not set up|is set up)/i);
+  });
   it('off: removes the flag', () => {
     const t = cmd('off');
     expect(t).toContain('${CLAUDE_SESSION_ID}');
@@ -68,6 +73,7 @@ describe('team commands', () => {
     expect(t).toMatch(/only after a yes/i);
     expect(t).toMatch(/\/model sonnet/);
     expect(t).toMatch(/never change the model/i);
+    expect(t).toMatch(/telemetry/i);
   });
 });
 

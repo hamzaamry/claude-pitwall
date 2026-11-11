@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text } from 'ink';
-import { statusAt, type AgentInfo, type SessionState } from '../model/state.js';
+import { advisorCallTokens, statusAt, type AgentInfo, type SessionState } from '../model/state.js';
 import { oneLine } from '../oneLine.js';
 import { dotCell, stepFlows, type ActiveFlow } from './flowAnim.js';
 import { effortText, fmtTokens } from './format.js';
@@ -145,7 +145,7 @@ function drawAdvisor(g: Grid, b: Rect, state: SessionState): void {
   putSplit(g, b, 1, 'ADVISOR', colors.advisor, `[${state.advisorModel ?? 'opus'}]`, colors.muted);
   put(g, b.x + 2, b.y + 2, clip(configured ? `● ${calls.length} call${calls.length === 1 ? '' : 's'}` : state.advisorModel ? '○ no calls yet' : '○ not configured', b.w - 4),
     configured ? colors.bright : colors.dim);
-  if (configured) put(g, b.x + 2, b.y + 3, clip(`${fmtTokens(calls.reduce((n, c) => n + c.tokens, 0))} tokens`, b.w - 4), colors.dim);
+  if (configured) put(g, b.x + 2, b.y + 3, clip(`${fmtTokens(calls.reduce((n, c) => n + advisorCallTokens(state, c), 0))} tokens`, b.w - 4), colors.dim);
   for (let x = b.x + 1; x < b.x + b.w - 1; x++) put(g, x, b.y + 4, '─', colors.frame);
   put(g, b.x + 2, b.y + 5, 'called when', colors.dim);
   TRIGGERS.forEach(([label, key], i) => {

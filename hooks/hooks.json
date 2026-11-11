@@ -55,6 +55,24 @@
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/event-log.mjs\""
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/same-error.mjs\" ok"
+          }
+        ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/same-error.mjs\" agent"
+          }
+        ]
       }
     ],
     "Stop": [
@@ -83,6 +101,14 @@
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/event-log.mjs\""
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/review-gate.mjs\" snapshot"
+          }
+        ]
       }
     ],
     "PostToolUseFailure": [
@@ -91,7 +117,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/same-error.mjs\""
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/same-error.mjs\" fail"
           }
         ]
       }

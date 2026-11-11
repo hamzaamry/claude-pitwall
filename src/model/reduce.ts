@@ -95,7 +95,7 @@ function onAgentResult(s: SessionState, e: Extract<TranscriptEvent, { kind: 'too
   const verdict = firstLine(e.text).match(VERDICT)?.[1].toLowerCase();
   const askOpus = spawn.askOpus;
   s.advisorCalls.push({ time: e.time, source: 'reviewer', why: askOpus ? 'ask-opus' : 'final review',
-    result: askOpus ? undefined : verdict, text: oneLine(e.text), tokens: card?.tokens ?? 0, taskNo: s.taskNo });
+    result: askOpus ? undefined : verdict, text: oneLine(e.text), tokens: card?.tokens ?? 0, taskNo: s.taskNo, toolUseId: e.toolUseId });
   if (askOpus) s.triggers.askOpus = 'done'; else s.triggers.finalReview = 'done';
   log(s, e.time, 'reviewer', askOpus ? 'answered' : `verdict: ${verdict ?? 'unclear'}`);
 }

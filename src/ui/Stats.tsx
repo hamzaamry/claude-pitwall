@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import { formatReset, type Limits } from '../limits.js';
-import type { Category, SessionState } from '../model/state.js';
+import { advisorCallTokens, type Category, type SessionState } from '../model/state.js';
 import { fmtClock, fmtTokens } from './format.js';
 import { colorForRole, colors } from './theme.js';
 
@@ -104,12 +104,12 @@ export function Stats({ state, limits, now, width = STATS_WIDTH }: { state: Sess
         ) : null}
         {calls.length === 0 ? <Text color={colors.dim}>not called yet</Text> : (
           <>
-            <Text color={colors.dim}>{fmtTokens(calls.reduce((n, c) => n + c.tokens, 0))} tokens</Text>
+            <Text color={colors.dim}>{fmtTokens(calls.reduce((n, c) => n + advisorCallTokens(state, c), 0))} tokens</Text>
             {calls.slice(-4).map((c, i) => (
               <Text key={i} wrap="truncate-end">
                 <Text color={colors.dim}>{fmtClock(c.time)}  </Text>{c.why}
                 {c.result ? <Text color={colors.advisor}>  [{c.result}]</Text> : null}
-                <Text color={colors.dim}>  {fmtTokens(c.tokens)}</Text>
+                <Text color={colors.dim}>  {fmtTokens(advisorCallTokens(state, c))}</Text>
               </Text>
             ))}
             <Text color={colors.dim}>latest advice</Text>

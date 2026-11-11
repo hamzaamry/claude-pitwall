@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import { statusAt, type AgentInfo, type SessionState } from '../model/state.js';
+import { advisorCallTokens, statusAt, type AgentInfo, type SessionState } from '../model/state.js';
 import { effortText, fmtElapsed, fmtTokens } from './format.js';
 import { colorForRole, colors } from './theme.js';
 
@@ -24,7 +24,7 @@ export function buildChips(state: SessionState, now: number): Chip[] {
     name: 'advisor', color: colors.advisor, model: state.advisorModel ?? 'opus',
     active: !!last && now - Date.parse(last.time) < ADVISOR_RECENT_MS,
     status: calls.length ? `${calls.length} call${calls.length === 1 ? '' : 's'}` : state.advisorModel ? 'no calls yet' : 'not configured',
-    tokens: calls.reduce((n, c) => n + c.tokens, 0),
+    tokens: calls.reduce((n, c) => n + advisorCallTokens(state, c), 0),
   });
 
   const byRole = new Map<string, AgentInfo[]>();
@@ -61,7 +61,7 @@ export function Header({ state, teamOn, now, width }: {
 }) {
   const agents = Object.values(state.agents);
   const total = agents.reduce((n, a) => n + a.tokens, 0);
-  const advisorTokens = state.advisorCalls.reduce((n, c) => n + c.tokens, 0);
+  const advisorTokens = state.advisorCalls.reduce((n, c) => n + advisorCallTokens(state, c), 0);
   const elapsed = state.startedAt ? fmtElapsed(now - Date.parse(state.startedAt)) : '0:00';
   const compact = width < 100;
   const columns = columnsFor(width);
