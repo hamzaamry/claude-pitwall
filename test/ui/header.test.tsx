@@ -52,6 +52,36 @@ describe('Header', () => {
     expect(f).not.toContain('working');
   });
 
+  it('always has an advisor chip, dim and "not configured" until a call is seen', () => {
+    const f = render(<Header state={sample()} teamOn={false} now={T0} width={150} />).lastFrame()!;
+    expect(f).toContain('advisor');
+    expect(f).toContain('not configured');
+  });
+
+  it('shows the advisor chip with its calls once there is one', () => {
+    const s = sample();
+    s.advisorCalls.push({ time: 't', source: 'native', why: 'native advice', tokens: 26_300 });
+    const f = render(<Header state={s} teamOn={false} now={T0} width={150} />).lastFrame()!;
+    expect(f).not.toContain('not configured');
+    expect(f).toContain('1 call');
+  });
+
+  it('groups helper agents of one role into one chip with a running count', () => {
+    const s = sample();
+    s.agents.a2 = { key: 'a2', role: 'Explore', model: 'opus', title: 'x', tokens: 1_000, status: 'working' };
+    s.agents.a3 = { key: 'a3', role: 'Explore', model: 'opus', title: 'y', tokens: 2_000, status: 'done' };
+    delete s.agents.a1;
+    const f = render(<Header state={s} teamOn={false} now={T0} width={150} />).lastFrame()!;
+    expect(f.match(/Explore/g)).toHaveLength(1);
+    expect(f).toContain('1 running');
+    expect(f).toContain('3k');
+  });
+
+  it('draws the chips in bordered boxes', () => {
+    const f = render(<Header state={sample()} teamOn={false} now={T0} width={150} />).lastFrame()!;
+    expect(f).toContain('╭');
+  });
+
   it('does not crash with no agents', () => {
     const f = render(<Header state={emptyState('s')} teamOn={false} now={T0} width={50} />).lastFrame()!;
     expect(f).toContain('pitwall');

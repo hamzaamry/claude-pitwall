@@ -14,3 +14,12 @@ export function fmtClock(iso: string): string {
   if (Number.isNaN(d.getTime())) return '--:--:--';
   return d.toTimeString().slice(0, 8);
 }
+
+const EFFORT_LEVEL: Record<string, number> = { low: 1, medium: 2, high: 3, xhigh: 3, max: 3 };
+export const effortLevel = (effort?: string): number => (effort ? EFFORT_LEVEL[effort] ?? 0 : 0);
+
+/** Three bars, filled up to the effort level: low ▮▯▯, medium ▮▮▯, high ▮▮▮. */
+export function effortText(effort?: string): string {
+  const n = effortLevel(effort);
+  return n === 0 ? '' : '▮'.repeat(n) + '▯'.repeat(3 - n);
+}

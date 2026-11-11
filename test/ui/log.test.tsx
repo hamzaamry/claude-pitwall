@@ -18,6 +18,11 @@ describe('Log', () => {
   it('shows who did it', () => {
     expect(render(<Log entries={entries} rows={4} />).lastFrame()!).toContain('Explore');
   });
+  it('has a titled box with a live marker', () => {
+    const f = render(<Log entries={entries} rows={3} />).lastFrame()!;
+    expect(f).toContain('session log');
+    expect(f).toContain('● live');
+  });
   it('is fine with no entries', () => {
     expect(() => render(<Log entries={[]} rows={3} />).lastFrame()).not.toThrow();
   });

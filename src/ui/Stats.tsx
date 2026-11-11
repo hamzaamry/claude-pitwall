@@ -3,11 +3,12 @@ import { Box, Text } from 'ink';
 import { formatReset, type Limits } from '../limits.js';
 import type { Category, SessionState } from '../model/state.js';
 import { fmtClock, fmtTokens } from './format.js';
-import { colors } from './theme.js';
+import { colorForRole, colors } from './theme.js';
 
 const WIDTH = 40;
 const ACTIVE_SKILL_MS = 2 * 60 * 1000;
 const CATEGORIES: Category[] = ['coding', 'reading', 'talking', 'planning', 'tests'];
+const LABEL: Record<Category, string> = { coding: 'coding', reading: 'reading files', talking: 'talking', planning: 'planning', tests: 'test output' };
 
 export function colorFor(pct: number): string {
   return pct >= 80 ? colors.warning : colors.done;
@@ -34,22 +35,27 @@ const bar = (pct: number) => {
   return '█'.repeat(filled) + '░'.repeat(10 - filled);
 };
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, right, titleColor = colors.dim, children }: {
+  title: string; right?: string; titleColor?: string; children: React.ReactNode;
+}) {
   return (
-    <Box flexDirection="column" borderStyle="single" borderColor={colors.dim} width={WIDTH} paddingX={1}>
-      <Text bold color={colors.dim}>{title}</Text>
+    <Box flexDirection="column" borderStyle="round" borderColor={colors.frame} width={WIDTH} paddingX={1}>
+      <Box justifyContent="space-between">
+        <Text bold color={titleColor}>{title}</Text>
+        {right ? <Text color={colors.dim}>{right}</Text> : null}
+      </Box>
       {children}
     </Box>
   );
 }
 
-function LimitRow({ label, pct, note }: { label: string; pct: number; note?: string }) {
+function LimitRow({ label, pct, note, color }: { label: string; pct: number; note?: string; color?: string }) {
   return (
     <Box flexDirection="column">
       <Text>
         <Text>{label.padEnd(8)}</Text>
-        <Text color={colorFor(pct)}>{bar(pct)}</Text>
-        <Text> {Math.round(pct)}%</Text>
+        <Text color={color ?? colorFor(pct)}>{bar(pct)}</Text>
+        <Text color={pct >= 80 ? colors.warning : colors.bright}> {Math.round(pct)}%</Text>
       </Text>
       {note ? <Text color={colors.dim}>{note}</Text> : null}
     </Box>
@@ -66,7 +72,7 @@ export function Stats({ state, limits, now }: { state: SessionState; limits: Lim
       <Section title="LIMITS">
         {limits === null ? <Text color={colors.dim}>run /pitwall:setup to see limits</Text> : (
           <>
-            {limits.contextPct !== undefined ? <LimitRow label="context" pct={limits.contextPct} /> : null}
+            {limits.contextPct !== undefined ? <LimitRow label="context" pct={limits.contextPct} color={limits.contextPct >= 80 ? colors.warning : colors.main} /> : null}
             {limits.fiveHour ? <LimitRow label="session" pct={limits.fiveHour.pct}
               note={`5h window · resets in ${formatReset(limits.fiveHour.resetsAt, now)}`} /> : null}
             {limits.weekly ? <LimitRow label="weekly" pct={limits.weekly.pct}
@@ -74,17 +80,19 @@ export function Stats({ state, limits, now }: { state: SessionState; limits: Lim
           </>
         )}
       </Section>
-      <Section title="ADVISOR · opus">
+      <Section title="ADVISOR" titleColor={colors.advisor} right={`opus · ${calls.length} call${calls.length === 1 ? '' : 's'}`}>
         {calls.length === 0 ? <Text color={colors.dim}>not called yet</Text> : (
           <>
-            <Text color={colors.advisor}>{calls.length} call{calls.length === 1 ? '' : 's'} · {fmtTokens(calls.reduce((n, c) => n + c.tokens, 0))} tokens</Text>
+            <Text color={colors.dim}>{fmtTokens(calls.reduce((n, c) => n + c.tokens, 0))} tokens</Text>
             {calls.slice(-4).map((c, i) => (
               <Text key={i} wrap="truncate-end">
-                {fmtClock(c.time)}  {c.why}{c.result ? `  [${c.result}]` : ''}  {fmtTokens(c.tokens)}
+                <Text color={colors.dim}>{fmtClock(c.time)}  </Text>{c.why}
+                {c.result ? <Text color={colors.advisor}>  [{c.result}]</Text> : null}
+                <Text color={colors.dim}>  {fmtTokens(c.tokens)}</Text>
               </Text>
             ))}
             <Text color={colors.dim}>latest advice</Text>
-            <Text color={colors.advisor}>
+            <Text color={colors.bright}>
               {clip(last.source === 'reviewer' && last.text ? last.text : '🔒 native advice (encrypted)', inner)}
             </Text>
           </>
@@ -93,19 +101,20 @@ export function Stats({ state, limits, now }: { state: SessionState; limits: Lim
       <Section title="WHERE TOKENS WENT · this task">
         {CATEGORIES.map((c) => (
           <Text key={c}>
-            <Text>{c.padEnd(9)}</Text>
-            <Text color={colors.sub}>{bar(pct[c])}</Text>
+            <Text>{LABEL[c].padEnd(14)}</Text>
+            <Text color={c === 'coding' ? colors.done : colors.muted}>{bar(pct[c])}</Text>
             <Text> {pct[c]}%</Text>
           </Text>
         ))}
       </Section>
-      <Section title="SKILLS · this session">
+      <Section title="SKILLS · this session" right="used by">
         {state.skills.length === 0 ? <Text color={colors.dim}>none yet</Text> : state.skills.map((k) => {
           const active = now - Date.parse(k.lastAt) < ACTIVE_SKILL_MS;
           return (
-            <Text key={`${k.name}:${k.by}`} wrap="truncate-end" color={active ? undefined : colors.dim}>
-              {active ? '●' : '○'} {k.name}  {k.by}
-            </Text>
+            <Box key={`${k.name}:${k.by}`} justifyContent="space-between">
+              <Text wrap="truncate-end" color={active ? colors.bright : colors.dim}>{active ? '●' : '○'} {clip(k.name, inner - k.by.length - 3)}</Text>
+              <Text color={active ? colorForRole(k.by) : colors.dim}>{k.by}</Text>
+            </Box>
           );
         })}
       </Section>

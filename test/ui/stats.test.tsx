@@ -40,7 +40,8 @@ describe('Stats: LIMITS', () => {
 describe('Stats: ADVISOR', () => {
   it('says not called yet with no calls', () => {
     const f = frame();
-    expect(f).toContain('ADVISOR · opus');
+    expect(f).toContain('ADVISOR');
+    expect(f).toContain('opus · 0 calls');
     expect(f).toContain('not called yet');
   });
   it('shows a lock for a native call', () => {
@@ -54,7 +55,8 @@ describe('Stats: ADVISOR', () => {
     const s = emptyState('s');
     s.advisorCalls.push({ time: '2026-11-11T11:59:00.000Z', source: 'native', why: 'native advice', tokens: 26_300 });
     const f = frame(s);
-    expect(f).toContain('1 call · 26.3k tokens');
+    expect(f).toContain('opus · 1 call');
+    expect(f).toContain('26.3k tokens');
     expect(f.split('\n').filter((l) => l.includes('native advice') && l.includes('26.3k'))).toHaveLength(1);
   });
   it('shows the reviewer text as latest advice', () => {
@@ -79,9 +81,13 @@ describe('Stats: WHERE TOKENS WENT', () => {
     const s = emptyState('s');
     s.categories.coding = 50; s.categories.reading = 50;
     const f = frame(s);
-    for (const w of ['coding', 'reading', 'talking', 'planning', 'tests']) expect(f).toContain(w);
+    for (const w of ['coding', 'reading files', 'talking', 'planning', 'test output']) expect(f).toContain(w);
     expect(f).toContain('WHERE TOKENS WENT');
   });
+});
+
+describe('Stats: look', () => {
+  it('uses rounded boxes', () => expect(frame()).toContain('╭'));
 });
 
 describe('Stats: SKILLS', () => {

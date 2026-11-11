@@ -2,15 +2,15 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text, useApp, useInput, useStdout } from 'ink';
 import { readLimits } from './limits.js';
 import { Graph } from './ui/Graph.js';
-import { Header } from './ui/Header.js';
-import { Log } from './ui/Log.js';
+import { Header, headerHeight } from './ui/Header.js';
+import { Log, logHeight } from './ui/Log.js';
 import { Stats } from './ui/Stats.js';
 import { colors } from './ui/theme.js';
 import { SessionWatcher } from './watcher.js';
 
 const STATS_MIN_WIDTH = 160;
 const STATS_WIDTH = 40;
-const LOG_ROWS = 6;
+const LOG_ROWS = 7;
 
 function useTermSize(width?: number, height?: number): { width: number; height: number } {
   const { stdout } = useStdout();
@@ -53,17 +53,23 @@ export function App({ cwd, home, sessionId, width, height, pollMs = 500, tickMs 
 
   const showStats = size.width >= STATS_MIN_WIDTH;
   const graphWidth = showStats ? size.width - STATS_WIDTH - 1 : size.width;
-  const graphHeight = Math.max(14, size.height - LOG_ROWS - 5);
+  const graphHeight = Math.max(16, size.height - headerHeight(state, size.width) - logHeight(LOG_ROWS) - 1);
   const limits = readLimits(state.sessionId, home);
 
   return (
     <Box flexDirection="column" width={size.width}>
       <Header state={state} teamOn={false} now={now} width={size.width} />
       <Box>
-        <Graph state={state} width={graphWidth} height={graphHeight} tickMs={tickMs} />
+        <Box flexDirection="column">
+          <Graph state={state} width={graphWidth} height={graphHeight} tickMs={tickMs} />
+          <Log entries={state.log} rows={LOG_ROWS} width={graphWidth} />
+        </Box>
         {showStats ? <Box marginLeft={1}><Stats state={state} limits={limits} now={now} /></Box> : null}
       </Box>
-      <Log entries={state.log} rows={LOG_ROWS} />
+      <Text backgroundColor={colors.pill} wrap="truncate-end">
+        <Text color={colors.bright}> $ pitwall watch</Text>
+        <Text color={colors.muted}>   q quit   watching {cwd.replace(process.env.HOME ?? '\0', '~')}</Text>
+      </Text>
     </Box>
   );
 }

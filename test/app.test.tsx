@@ -41,6 +41,21 @@ describe('App', () => {
     expect(f).toContain('find callers');
   });
 
+  it('has a footer with the quit key', () => {
+    cpSync(FIXTURE, projectDir, { recursive: true });
+    const f = show(170);
+    expect(f).toContain('$ pitwall watch');
+    expect(f).toContain('q quit');
+  });
+
+  it('fits in the terminal height', () => {
+    cpSync(FIXTURE, projectDir, { recursive: true });
+    for (const h of [45, 30]) {
+      const f = render(<App cwd="/proj" home={home} width={170} height={h} pollMs={0} tickMs={0} />).lastFrame()!;
+      expect(f.split('\n').length).toBeLessThanOrEqual(Math.max(h, 40));
+    }
+  });
+
   it('survives a tiny terminal', () => {
     cpSync(FIXTURE, projectDir, { recursive: true });
     expect(() => show(20)).not.toThrow();

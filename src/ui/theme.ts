@@ -7,6 +7,11 @@ export const colors = {
   failed: '#f85149',
   warning: '#d29922',
   dim: '#6e7681',
+  muted: '#8b949e',
+  border: '#30363d',
+  frame: '#21262d',
+  bright: '#f0f6fc',
+  pill: '#161b22',
 } as const;
 
 export function colorForRole(role: string): string {

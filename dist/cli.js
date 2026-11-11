@@ -28206,10 +28206,10 @@ var require_react_jsx_runtime_development = __commonJS({
           }
         }
         var jsx6 = jsxWithValidationDynamic;
-        var jsxs5 = jsxWithValidationStatic;
+        var jsxs6 = jsxWithValidationStatic;
         exports.Fragment = REACT_FRAGMENT_TYPE;
         exports.jsx = jsx6;
-        exports.jsxs = jsxs5;
+        exports.jsxs = jsxs6;
       })();
     }
   }
@@ -33913,22 +33913,6 @@ function emptyState(sessionId) {
   };
 }
 
-// src/ui/format.ts
-function fmtTokens(n) {
-  if (n < 1e3) return String(n);
-  if (n < 1e6) return `${+(n / 1e3).toFixed(1)}k`;
-  return `${+(n / 1e6).toFixed(2)}M`;
-}
-function fmtElapsed(ms) {
-  const total = Math.max(0, Math.floor(ms / 1e3));
-  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
-}
-function fmtClock(iso) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "--:--:--";
-  return d.toTimeString().slice(0, 8);
-}
-
 // src/ui/flowAnim.ts
 var MAX_DOTS = 6;
 var MAX_TRIES = 20;
@@ -33946,6 +33930,28 @@ function stepFlows(active, pending, layout) {
   }
   pending.unshift(...retry);
   return next;
+}
+
+// src/ui/format.ts
+function fmtTokens(n) {
+  if (n < 1e3) return String(n);
+  if (n < 1e6) return `${+(n / 1e3).toFixed(1)}k`;
+  return `${+(n / 1e6).toFixed(2)}M`;
+}
+function fmtElapsed(ms) {
+  const total = Math.max(0, Math.floor(ms / 1e3));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
+function fmtClock(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "--:--:--";
+  return d.toTimeString().slice(0, 8);
+}
+var EFFORT_LEVEL = { low: 1, medium: 2, high: 3, xhigh: 3, max: 3 };
+var effortLevel = (effort) => effort ? EFFORT_LEVEL[effort] ?? 0 : 0;
+function effortText(effort) {
+  const n = effortLevel(effort);
+  return n === 0 ? "" : "\u25AE".repeat(n) + "\u25AF".repeat(3 - n);
 }
 
 // src/ui/graphLayout.ts
@@ -34011,7 +34017,12 @@ var colors = {
   done: "#3fb950",
   failed: "#f85149",
   warning: "#d29922",
-  dim: "#6e7681"
+  dim: "#6e7681",
+  muted: "#8b949e",
+  border: "#30363d",
+  frame: "#21262d",
+  bright: "#f0f6fc",
+  pill: "#161b22"
 };
 function colorForRole(role) {
   if (role === "main") return colors.main;
@@ -34023,12 +34034,10 @@ function colorForRole(role) {
 // src/ui/Graph.tsx
 var import_jsx_runtime = __toESM(require_jsx_runtime(), 1);
 function newGrid(w, h) {
-  return {
-    ch: Array.from({ length: h }, () => Array(w).fill(" ")),
-    col: Array.from({ length: h }, () => Array(w).fill(""))
-  };
+  const make = (v) => Array.from({ length: h }, () => Array(w).fill(v));
+  return { ch: make(" "), col: make(""), bg: make("") };
 }
-function put(g, x, y, text, color = "", onlyBlank = false) {
+function put(g, x, y, text, color = "", onlyBlank = false, bg = "") {
   if (y < 0 || y >= g.ch.length) return;
   [...text].forEach((c, i) => {
     const px = x + i;
@@ -34036,29 +34045,42 @@ function put(g, x, y, text, color = "", onlyBlank = false) {
     if (onlyBlank && g.ch[y][px] !== " ") return;
     g.ch[y][px] = c;
     g.col[y][px] = color;
+    g.bg[y][px] = bg;
   });
 }
 function box(g, b, color) {
   if (b.w < 2 || b.h < 2) return;
-  put(g, b.x, b.y, "\u250C" + "\u2500".repeat(b.w - 2) + "\u2510", color);
-  put(g, b.x, b.y + b.h - 1, "\u2514" + "\u2500".repeat(b.w - 2) + "\u2518", color);
-  for (let y = b.y + 1; y < b.y + b.h - 1; y++) {
-    put(g, b.x, y, "\u2502" + " ".repeat(b.w - 2) + "\u2502", color);
-  }
+  put(g, b.x, b.y, "\u256D" + "\u2500".repeat(b.w - 2) + "\u256E", color);
+  put(g, b.x, b.y + b.h - 1, "\u2570" + "\u2500".repeat(b.w - 2) + "\u256F", color);
+  for (let y = b.y + 1; y < b.y + b.h - 1; y++) put(g, b.x, y, "\u2502" + " ".repeat(b.w - 2) + "\u2502", color);
 }
 var clip = (s, n) => n <= 0 ? "" : s.length > n ? s.slice(0, Math.max(0, n - 1)) + "\u2026" : s;
+function putSplit(g, b, row, left, lc, right, rc) {
+  const inner = b.w - 4;
+  const r = clip(right, Math.max(0, inner - left.length - 1));
+  put(g, b.x + 2, b.y + row, clip(left, inner), lc);
+  put(g, b.x + b.w - 2 - r.length, b.y + row, r, rc);
+}
+function putEffort(g, x, y, effort, color, maxW) {
+  const bars = effortText(effort);
+  if (!bars || maxW < bars.length) return 0;
+  [...bars].forEach((c, i) => put(g, x + i, y, c, c === "\u25AE" ? color : colors.border));
+  const name = clip(` ${effort}`, maxW - bars.length);
+  put(g, x + bars.length, y, name, colors.dim);
+  return bars.length + name.length;
+}
 function bar(status, n, frame) {
   if (n <= 0) return { text: "", color: "" };
-  if (status === "done") return { text: "\u2588".repeat(n), color: colors.done };
-  if (status === "failed") return { text: "\u2588".repeat(n), color: colors.failed };
-  if (status === "idle") return { text: "\u2591".repeat(n), color: colors.dim };
-  const cells = Array(n).fill("\u2591");
+  if (status === "done") return { text: "\u2501".repeat(n), color: colors.done };
+  if (status === "failed") return { text: "\u2501".repeat(n), color: colors.failed };
+  if (status === "idle") return { text: "\u2500".repeat(n), color: colors.frame };
+  const cells = Array(n).fill("\u2500");
   const head = frame % n;
-  for (let i = 0; i < Math.min(4, n); i++) cells[(head + i) % n] = "\u2588";
+  for (let i = 0; i < Math.min(4, n); i++) cells[(head + i) % n] = "\u2501";
   return { text: cells.join(""), color: colors.warning };
 }
 var STATUS = {
-  working: { mark: "\u25CF working", color: colors.warning },
+  working: { mark: "\u25CF working", color: colors.bright },
   idle: { mark: "\u25CB idle", color: colors.dim },
   done: { mark: "\u2713 done", color: colors.done },
   failed: { mark: "\u2717 failed", color: colors.failed }
@@ -34106,60 +34128,83 @@ function drawWires(g, layout, active) {
   });
   for (const [k, b] of bits) {
     const [x, y] = k.split(",").map(Number);
-    put(g, x, y, GLYPH[b] ?? "\u253C", wireColor.get(k) ?? colors.dim);
+    put(g, x, y, GLYPH[b] ?? "\u253C", wireColor.get(k) ?? colors.border);
   }
+}
+function drawWireLabels(g, layout) {
+  const adv = layout.wires.find((w) => w.to === "advisor");
+  if (adv && adv.cells.length >= 8) {
+    const [x, y] = adv.cells[Math.floor(adv.cells.length / 2) - 3];
+    put(g, x, y - 1, "advice", colors.dim, true);
+  }
+  const trunk = layout.wires.find((w) => w.to !== "advisor");
+  if (trunk) put(g, trunk.cells[0][0] + 2, trunk.cells[0][1], "delegate", colors.dim, true);
 }
 function drawDots(g, layout, active) {
   for (const f of active) {
     const cell = layout.wires[f.wireIndex]?.cells[f.pos];
     if (!cell) continue;
     put(g, cell[0], cell[1], "\u25CF", f.color);
-    const label = clip(f.label, 24);
-    const right = cell[0] + 2 + label.length < g.ch[0].length;
-    put(g, right ? cell[0] + 2 : cell[0] - 1 - label.length, cell[1], label, f.color, true);
+    const label = ` ${clip(f.label, 22)} `;
+    const right = cell[0] + 1 + label.length < g.ch[0].length;
+    put(g, right ? cell[0] + 1 : cell[0] - label.length, cell[1], label, colors.bright, true, colors.pill);
   }
 }
+var TRIGGERS = ["plan check", "stuck", "final review", "/ask-opus"];
 function drawAdvisor(g, b, state) {
-  const configured = state.advisorCalls.length > 0;
+  const calls = state.advisorCalls;
+  const configured = calls.length > 0;
   const color = configured ? colors.advisor : colors.dim;
-  box(g, b, color);
-  const inner = b.w - 4;
-  const row = (n, text, c = color) => put(g, b.x + 2, b.y + n, clip(text, inner), c);
-  row(1, "advisor \xB7 opus", color);
-  row(2, configured ? `${state.advisorCalls.length} call${state.advisorCalls.length === 1 ? "" : "s"}` : "not configured", colors.dim);
-  if (configured) row(3, `${fmtTokens(state.advisorCalls.reduce((n, c) => n + c.tokens, 0))} tokens`, colors.dim);
-  ["plan check", "stuck", "final review", "/ask-opus"].forEach((t, i) => row(4 + i, `\u25CB ${t}`));
-  row(Math.max(10, b.h - 3), "on call", colors.dim);
-  row(Math.max(11, b.h - 2), "never edits code", colors.dim);
+  box(g, b, configured ? colors.advisor : colors.border);
+  putSplit(g, b, 1, "ADVISOR", colors.advisor, "[opus]", colors.muted);
+  put(
+    g,
+    b.x + 2,
+    b.y + 2,
+    clip(configured ? `\u25CF ${calls.length} call${calls.length === 1 ? "" : "s"}` : "\u25CB not configured", b.w - 4),
+    configured ? colors.bright : colors.dim
+  );
+  if (configured) put(g, b.x + 2, b.y + 3, clip(`${fmtTokens(calls.reduce((n, c) => n + c.tokens, 0))} tokens`, b.w - 4), colors.dim);
+  for (let x = b.x + 1; x < b.x + b.w - 1; x++) put(g, x, b.y + 4, "\u2500", colors.frame);
+  put(g, b.x + 2, b.y + 5, "called when", colors.dim);
+  TRIGGERS.forEach((t, i) => putSplit(g, b, 7 + i, t, color, "\u25CB", color));
+  put(g, b.x + 2, b.y + Math.max(12, b.h - 3), "on call", colors.dim);
+  put(g, b.x + 2, b.y + Math.max(13, b.h - 2), clip("never edits code", b.w - 4), colors.dim);
 }
 function drawMain(g, b, state, frame) {
   const a0 = state.agents.main;
-  const a = a0 && { ...a0, status: statusAt(a0, Date.now()) };
-  box(g, b, colors.main);
+  const status = a0 ? statusAt(a0, Date.now()) : "idle";
+  box(g, b, status === "working" ? colors.main : colors.border);
+  putSplit(g, b, 1, "MAIN", colors.main, a0?.model ? `[${a0.model}]` : "", colors.muted);
   const inner = b.w - 4;
-  const label = ["main", a?.model, a?.effort].filter(Boolean).join(" \xB7 ");
-  put(g, b.x + 2, b.y + 1, clip(label, inner), colors.main);
-  put(g, b.x + 2, b.y + 2, clip(state.currentTask, inner), colors.dim);
-  const br = bar(a?.status ?? "idle", inner, frame);
-  put(g, b.x + 2, b.y + 3, br.text, br.color);
+  put(g, b.x + 2, b.y + 2, status === "working" ? "\u25CF" : "\u25CB", status === "working" ? colors.bright : colors.dim);
+  put(g, b.x + 4, b.y + 2, clip(state.currentTask, inner - 2), status === "working" ? colors.bright : colors.dim);
+  put(g, b.x + 2, b.y + 3, "effort ", colors.dim);
+  const used = putEffort(g, b.x + 9, b.y + 3, a0?.effort, colors.main, inner - 7);
+  if (!used) put(g, b.x + 9, b.y + 3, clip("unknown", inner - 7), colors.dim);
 }
 function drawCard(g, b, a0, frame) {
   const a = { ...a0, status: statusAt(a0, Date.now()) };
-  const color = a.status === "failed" ? colors.failed : a.status === "done" ? colors.dim : colorForRole(a.role);
-  box(g, b, color);
+  const color = colorForRole(a.role);
   const inner = b.w - 4;
-  put(g, b.x + 2, b.y + 1, clip(a.title || a.role, inner), colorForRole(a.role));
-  put(g, b.x + 2, b.y + 2, clip([a.role, a.model, a.effort].filter(Boolean).join(" \xB7 "), inner), colors.dim);
-  put(g, b.x + 2, b.y + 3, clip(STATUS[a.status].mark, inner), STATUS[a.status].color);
+  box(g, b, a.status === "working" ? color : a.status === "failed" ? colors.failed : colors.border);
+  put(g, b.x + 2, b.y + 1, clip(a.title || a.role, inner), a.status === "idle" || a.status === "done" ? colors.muted : color);
+  put(g, b.x + 2, b.y + 2, clip([a.role, a.model].filter(Boolean).join(" \xB7 "), inner), colors.dim);
+  const st = STATUS[a.status];
+  put(g, b.x + 2, b.y + 3, clip(st.mark, inner), st.color);
+  putEffort(g, b.x + 2 + st.mark.length + 2, b.y + 3, a.effort, color, inner - st.mark.length - 2);
   const br = bar(a.status, inner, frame);
   put(g, b.x + 2, b.y + b.h - 2, br.text, br.color);
 }
+var LEGEND = "\u25CF working \xB7 \u25CB idle \xB7 \u2713 done";
 function Graph({ state, width, height, tickMs = 120 }) {
+  const innerW = Math.max(0, width - 4);
+  const innerH = Math.max(0, height - 3);
   const agents = Object.values(state.agents);
   const layout = (0, import_react22.useMemo)(
-    () => layoutGraph(agents, width, height),
+    () => layoutGraph(agents, innerW, innerH),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [agents.map((a) => `${a.key}:${a.status}:${a.toolUseId ?? ""}`).join("|"), width, height]
+    [agents.map((a) => `${a.key}:${a.status}:${a.toolUseId ?? ""}`).join("|"), innerW, innerH]
   );
   const [frame, setFrame] = (0, import_react22.useState)(0);
   const active = (0, import_react22.useRef)([]);
@@ -34175,101 +34220,147 @@ function Graph({ state, width, height, tickMs = 120 }) {
     }, tickMs);
     return () => clearInterval(id);
   }, [tickMs]);
-  const g = newGrid(Math.max(0, width), Math.max(0, height));
+  const g = newGrid(innerW, innerH);
   drawWires(g, layout, active.current);
+  drawWireLabels(g, layout);
   for (const b of layout.boxes) {
     if (b.key === "advisor") drawAdvisor(g, b, state);
     else if (b.key === "main") drawMain(g, b, state, frame);
     else if (state.agents[b.key]) drawCard(g, b, state.agents[b.key], frame);
   }
   drawDots(g, layout, active.current);
-  return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Box_default, { flexDirection: "column", width, height, children: g.ch.map((row, y) => {
-    const runs = [];
-    row.forEach((c, x) => {
-      const color = g.col[y][x];
-      const last = runs[runs.length - 1];
-      if (last && last.color === color) last.text += c;
-      else runs.push({ text: c, color });
-    });
-    return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Text, { children: runs.map((r, i) => r.color ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Text, { color: r.color, children: r.text }, i) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Text, { children: r.text }, i)) }, y);
-  }) });
+  const title = innerW >= "live flow".length + LEGEND.length + 2 ? "live flow" + " ".repeat(innerW - "live flow".length - LEGEND.length) + LEGEND : clip("live flow", innerW);
+  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Box_default, { flexDirection: "column", width, height, borderStyle: "round", borderColor: colors.frame, paddingX: 1, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Text, { color: colors.dim, children: title }),
+    g.ch.map((row, y) => {
+      const runs = [];
+      row.forEach((c, x) => {
+        const color = g.col[y][x];
+        const bg = g.bg[y][x];
+        const last = runs[runs.length - 1];
+        if (last && last.color === color && last.bg === bg) last.text += c;
+        else runs.push({ text: c, color, bg });
+      });
+      return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Text, { children: runs.map((r, i) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Text, { color: r.color || void 0, backgroundColor: r.bg || void 0, children: r.text }, i)) }, y);
+    })
+  ] });
 }
 
 // src/ui/Header.tsx
 var import_jsx_runtime2 = __toESM(require_jsx_runtime(), 1);
-var STATUS_COLOR = {
-  working: colors.warning,
-  idle: colors.dim,
-  done: colors.done,
-  failed: colors.failed
-};
+var ADVISOR_RECENT_MS = 8e3;
+function buildChips(state, now) {
+  const main = state.agents.main;
+  const mainStatus = main ? statusAt(main, now) : "idle";
+  const chips = [{
+    name: "main",
+    color: colors.main,
+    active: mainStatus === "working",
+    status: mainStatus,
+    model: [main?.model, main?.effort].filter(Boolean).join(" \xB7 "),
+    tokens: main?.tokens ?? 0
+  }];
+  const calls = state.advisorCalls;
+  const last = calls[calls.length - 1];
+  chips.push({
+    name: "advisor",
+    color: colors.advisor,
+    model: "opus",
+    active: !!last && now - Date.parse(last.time) < ADVISOR_RECENT_MS,
+    status: calls.length ? `${calls.length} call${calls.length === 1 ? "" : "s"}` : "not configured",
+    tokens: calls.reduce((n, c) => n + c.tokens, 0)
+  });
+  const byRole = /* @__PURE__ */ new Map();
+  for (const a of Object.values(state.agents)) {
+    if (a.key === "main") continue;
+    byRole.set(a.role, [...byRole.get(a.role) ?? [], a]);
+  }
+  for (const [role, list] of byRole) {
+    const running = list.filter((a) => statusAt(a, now) === "working").length;
+    const status = running ? `${running} running` : list.some((a) => a.status === "failed") ? "failed" : list.every((a) => a.status === "done") ? "done" : "idle";
+    const models = [...new Set(list.map((a) => a.model).filter(Boolean))].join("/");
+    const effort = list.find((a) => a.effort)?.effort;
+    chips.push({
+      name: role,
+      color: colorForRole(role),
+      active: running > 0,
+      status,
+      model: [models, effort].filter(Boolean).join(" \xB7 "),
+      tokens: list.reduce((n, a) => n + a.tokens, 0)
+    });
+  }
+  return chips;
+}
+var columnsFor = (width) => width >= 100 ? 4 : 2;
+function headerHeight(state, width) {
+  const chips = 2 + new Set(Object.values(state.agents).filter((a) => a.key !== "main").map((a) => a.role)).size;
+  return 1 + 3 * Math.ceil(chips / columnsFor(width));
+}
 function Header({ state, teamOn, now, width }) {
   const agents = Object.values(state.agents);
   const total = agents.reduce((n, a) => n + a.tokens, 0);
   const advisorTokens = state.advisorCalls.reduce((n, c) => n + c.tokens, 0);
   const elapsed = state.startedAt ? fmtElapsed(now - Date.parse(state.startedAt)) : "0:00";
   const compact = width < 100;
+  const columns = columnsFor(width);
+  const chipW = Math.max(12, Math.floor(width / columns));
   return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(Box_default, { flexDirection: "column", width, children: [
     /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(Text, { wrap: "truncate-end", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Text, { bold: true, children: "pitwall" }),
-      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Text, { color: colors.dim, children: " \u2502 " }),
-      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Text, { children: state.currentTask || "no task yet" }),
-      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(Text, { color: colors.dim, children: [
-        " (",
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Text, { bold: true, color: colors.bright, children: "pitwall" }),
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Text, { color: colors.border, children: " \u2502 " }),
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Text, { color: colors.bright, children: state.currentTask || "no task yet" }),
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(Text, { color: teamOn ? colors.done : colors.dim, children: [
+        "  [",
         teamOn ? "team on" : "team off",
-        ")  "
+        "]"
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(Text, { children: [
-        "tokens ",
-        fmtTokens(total)
-      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Text, { color: colors.muted, children: "   tokens " }),
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Text, { color: colors.bright, children: fmtTokens(total) }),
       advisorTokens > 0 ? /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(Text, { color: colors.advisor, children: [
         " + advisor ",
         fmtTokens(advisorTokens)
       ] }) : null,
-      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Text, { color: colors.dim, children: "  " }),
-      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(Text, { children: [
-        "elapsed ",
-        elapsed
-      ] })
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Text, { color: colors.muted, children: "   elapsed " }),
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Text, { color: colors.bright, children: elapsed })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Box_default, { flexWrap: "wrap", columnGap: 2, children: agents.map((a0) => {
-      const a = { ...a0, status: statusAt(a0, now) };
-      return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(Text, { wrap: "truncate-end", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Text, { color: a.status === "working" ? colorForRole(a.role) : colors.dim, children: "\u25CF " }),
-        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Text, { color: colorForRole(a.role), children: a.role }),
-        /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(Text, { color: colors.dim, children: [
-          " ",
-          [a.model, a.effort].filter(Boolean).join(" \xB7 ")
-        ] }),
-        compact ? null : /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(Text, { color: STATUS_COLOR[a.status], children: [
-          " ",
-          a.status
-        ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(Text, { children: [
-          " ",
-          fmtTokens(a.tokens)
-        ] })
-      ] }, a.key);
-    }) })
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Box_default, { flexWrap: "wrap", children: buildChips(state, now).map((c) => /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Box_default, { width: chipW, borderStyle: "round", borderColor: c.active ? c.color : colors.frame, paddingX: 1, children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Box_default, { width: chipW - 4, children: /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(Text, { wrap: "truncate-end", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Text, { color: c.color, dimColor: !c.active, children: "\u25CF " }),
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Text, { bold: true, color: c.color, children: c.name }),
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(Text, { color: colors.dim, children: [
+        " ",
+        c.model
+      ] }),
+      compact ? null : /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(Text, { color: c.active ? colors.bright : colors.dim, children: [
+        "  ",
+        c.status
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(Text, { color: colors.muted, children: [
+        " ",
+        fmtTokens(c.tokens)
+      ] })
+    ] }) }) }, c.name)) })
   ] });
 }
 
 // src/ui/Log.tsx
 var import_jsx_runtime3 = __toESM(require_jsx_runtime(), 1);
-function Log({ entries, rows }) {
+var logHeight = (rows) => rows + 3;
+function Log({ entries, rows, width }) {
   const shown = rows > 0 ? entries.slice(-rows) : [];
-  return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Box_default, { flexDirection: "column", children: shown.map((e, i) => /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(Text, { wrap: "truncate-end", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(Text, { color: colors.dim, children: [
-      fmtClock(e.time),
-      "  "
+  return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(Box_default, { flexDirection: "column", borderStyle: "round", borderColor: colors.frame, paddingX: 1, width, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(Box_default, { justifyContent: "space-between", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Text, { color: colors.dim, children: "session log" }),
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Text, { color: colors.done, children: "\u25CF live" })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Text, { color: colorForRole(e.who), children: e.who }),
-    /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(Text, { children: [
-      "  ",
-      e.text
-    ] })
-  ] }, i)) });
+    shown.map((e, i) => /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(Text, { wrap: "truncate-end", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(Text, { color: colors.dim, children: [
+        fmtClock(e.time),
+        "  "
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Text, { color: colorForRole(e.who), children: e.who.slice(0, 12).padEnd(12) }),
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Text, { children: e.text })
+    ] }, i))
+  ] });
 }
 
 // src/ui/Stats.tsx
@@ -34277,6 +34368,7 @@ var import_jsx_runtime4 = __toESM(require_jsx_runtime(), 1);
 var WIDTH = 40;
 var ACTIVE_SKILL_MS = 2 * 60 * 1e3;
 var CATEGORIES = ["coding", "reading", "talking", "planning", "tests"];
+var LABEL = { coding: "coding", reading: "reading files", talking: "talking", planning: "planning", tests: "test output" };
 function colorFor(pct) {
   return pct >= 80 ? colors.warning : colors.done;
 }
@@ -34298,18 +34390,21 @@ var bar2 = (pct) => {
   const filled = Math.max(0, Math.min(10, Math.round(pct / 10)));
   return "\u2588".repeat(filled) + "\u2591".repeat(10 - filled);
 };
-function Section({ title, children }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Box_default, { flexDirection: "column", borderStyle: "single", borderColor: colors.dim, width: WIDTH, paddingX: 1, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { bold: true, color: colors.dim, children: title }),
+function Section({ title, right, titleColor = colors.dim, children }) {
+  return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Box_default, { flexDirection: "column", borderStyle: "round", borderColor: colors.frame, width: WIDTH, paddingX: 1, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Box_default, { justifyContent: "space-between", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { bold: true, color: titleColor, children: title }),
+      right ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.dim, children: right }) : null
+    ] }),
     children
   ] });
 }
-function LimitRow({ label, pct, note }) {
+function LimitRow({ label, pct, note, color }) {
   return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Box_default, { flexDirection: "column", children: [
     /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { children: [
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { children: label.padEnd(8) }),
-      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colorFor(pct), children: bar2(pct) }),
-      /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: color ?? colorFor(pct), children: bar2(pct) }),
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { color: pct >= 80 ? colors.warning : colors.bright, children: [
         " ",
         Math.round(pct),
         "%"
@@ -34325,7 +34420,7 @@ function Stats({ state, limits, now }) {
   const last = calls[calls.length - 1];
   return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Box_default, { flexDirection: "column", width: WIDTH, children: [
     /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Section, { title: "LIMITS", children: limits === null ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.dim, children: "run /pitwall:setup to see limits" }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
-      limits.contextPct !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(LimitRow, { label: "context", pct: limits.contextPct }) : null,
+      limits.contextPct !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(LimitRow, { label: "context", pct: limits.contextPct, color: limits.contextPct >= 80 ? colors.warning : colors.main }) : null,
       limits.fiveHour ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
         LimitRow,
         {
@@ -34343,43 +34438,48 @@ function Stats({ state, limits, now }) {
         }
       ) : null
     ] }) }),
-    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Section, { title: "ADVISOR \xB7 opus", children: calls.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.dim, children: "not called yet" }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { color: colors.advisor, children: [
-        calls.length,
-        " call",
-        calls.length === 1 ? "" : "s",
-        " \xB7 ",
+    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Section, { title: "ADVISOR", titleColor: colors.advisor, right: `opus \xB7 ${calls.length} call${calls.length === 1 ? "" : "s"}`, children: calls.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.dim, children: "not called yet" }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { color: colors.dim, children: [
         fmtTokens(calls.reduce((n, c) => n + c.tokens, 0)),
         " tokens"
       ] }),
       calls.slice(-4).map((c, i) => /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { wrap: "truncate-end", children: [
-        fmtClock(c.time),
-        "  ",
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { color: colors.dim, children: [
+          fmtClock(c.time),
+          "  "
+        ] }),
         c.why,
-        c.result ? `  [${c.result}]` : "",
-        "  ",
-        fmtTokens(c.tokens)
+        c.result ? /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { color: colors.advisor, children: [
+          "  [",
+          c.result,
+          "]"
+        ] }) : null,
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { color: colors.dim, children: [
+          "  ",
+          fmtTokens(c.tokens)
+        ] })
       ] }, i)),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.dim, children: "latest advice" }),
-      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.advisor, children: clip2(last.source === "reviewer" && last.text ? last.text : "\u{1F512} native advice (encrypted)", inner) })
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.bright, children: clip2(last.source === "reviewer" && last.text ? last.text : "\u{1F512} native advice (encrypted)", inner) })
     ] }) }),
     /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Section, { title: "WHERE TOKENS WENT \xB7 this task", children: CATEGORIES.map((c) => /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { children: c.padEnd(9) }),
-      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.sub, children: bar2(pct[c]) }),
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { children: LABEL[c].padEnd(14) }),
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: c === "coding" ? colors.done : colors.muted, children: bar2(pct[c]) }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { children: [
         " ",
         pct[c],
         "%"
       ] })
     ] }, c)) }),
-    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Section, { title: "SKILLS \xB7 this session", children: state.skills.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.dim, children: "none yet" }) : state.skills.map((k) => {
+    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Section, { title: "SKILLS \xB7 this session", right: "used by", children: state.skills.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.dim, children: "none yet" }) : state.skills.map((k) => {
       const active = now - Date.parse(k.lastAt) < ACTIVE_SKILL_MS;
-      return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { wrap: "truncate-end", color: active ? void 0 : colors.dim, children: [
-        active ? "\u25CF" : "\u25CB",
-        " ",
-        k.name,
-        "  ",
-        k.by
+      return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Box_default, { justifyContent: "space-between", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { wrap: "truncate-end", color: active ? colors.bright : colors.dim, children: [
+          active ? "\u25CF" : "\u25CB",
+          " ",
+          clip2(k.name, inner - k.by.length - 3)
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: active ? colorForRole(k.by) : colors.dim, children: k.by })
       ] }, `${k.name}:${k.by}`);
     }) })
   ] });
@@ -34753,7 +34853,7 @@ var SessionWatcher = class {
 var import_jsx_runtime5 = __toESM(require_jsx_runtime(), 1);
 var STATS_MIN_WIDTH = 160;
 var STATS_WIDTH = 40;
-var LOG_ROWS = 6;
+var LOG_ROWS = 7;
 function useTermSize(width, height) {
   const { stdout } = use_stdout_default();
   const read = () => ({ width: width ?? stdout?.columns ?? 120, height: height ?? stdout?.rows ?? 45 });
@@ -34802,15 +34902,24 @@ function App2({ cwd: cwd2, home, sessionId, width, height, pollMs = 500, tickMs 
   }
   const showStats = size.width >= STATS_MIN_WIDTH;
   const graphWidth = showStats ? size.width - STATS_WIDTH - 1 : size.width;
-  const graphHeight = Math.max(14, size.height - LOG_ROWS - 5);
+  const graphHeight = Math.max(16, size.height - headerHeight(state, size.width) - logHeight(LOG_ROWS) - 1);
   const limits = readLimits(state.sessionId, home);
   return /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(Box_default, { flexDirection: "column", width: size.width, children: [
     /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Header, { state, teamOn: false, now, width: size.width }),
     /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(Box_default, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Graph, { state, width: graphWidth, height: graphHeight, tickMs }),
+      /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(Box_default, { flexDirection: "column", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Graph, { state, width: graphWidth, height: graphHeight, tickMs }),
+        /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Log, { entries: state.log, rows: LOG_ROWS, width: graphWidth })
+      ] }),
       showStats ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Box_default, { marginLeft: 1, children: /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Stats, { state, limits, now }) }) : null
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Log, { entries: state.log, rows: LOG_ROWS })
+    /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(Text, { backgroundColor: colors.pill, wrap: "truncate-end", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Text, { color: colors.bright, children: " $ pitwall watch" }),
+      /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(Text, { color: colors.muted, children: [
+        "   q quit   watching ",
+        cwd2.replace(process.env.HOME ?? "\0", "~")
+      ] })
+    ] })
   ] });
 }
 

@@ -14,17 +14,22 @@ function base() {
 describe('Graph', () => {
   it("shows a card title and 'role · model'", () => {
     const s = base();
-    s.agents.a1 = { key: 'a1', role: 'Explore', model: 'opus', title: 'find callers', tokens: 5, status: 'working' };
+    s.agents.a1 = { key: 'a1', role: 'Explore', model: 'opus', effort: 'low', title: 'find callers', tokens: 5, status: 'working' };
     const f = render(<Graph state={s} width={100} height={22} tickMs={0} />).lastFrame()!;
     expect(f).toContain('find callers');
+    expect(f).toContain('▮▯▯ low');
     expect(f).toContain('Explore · opus');
-    expect(f).toContain('main · sonnet');
+    expect(f).toContain('MAIN');
+    expect(f).toContain('sonnet');
     expect(f).toContain('fix the save bug');
+    expect(f).toContain('effort ▮▮▯ medium');
   });
 
   it("advisor panel shows 'not configured' with no advisor calls", () => {
     const f = render(<Graph state={base()} width={100} height={22} tickMs={0} />).lastFrame()!;
-    expect(f).toContain('advisor · opus');
+    expect(f).toContain('ADVISOR');
+    expect(f).toContain('opus');
+    expect(f).toContain('called when');
     expect(f).toContain('not configured');
     expect(f).toContain('plan check');
     expect(f).toContain('never edits code');
@@ -46,6 +51,21 @@ describe('Graph', () => {
     const f = render(<Graph state={s} width={140} height={22} tickMs={0} />).lastFrame()!;
     expect(f).toContain('✓ done');
     expect(f).toContain('✗ failed');
+  });
+
+  it('has a framed graph with a title and a legend', () => {
+    const f = render(<Graph state={base()} width={110} height={22} tickMs={0} />).lastFrame()!;
+    expect(f).toContain('live flow');
+    expect(f).toContain('● working · ○ idle · ✓ done');
+    expect(f).toContain('╭');
+  });
+
+  it('labels the wires like the mockup', () => {
+    const s = base();
+    s.agents.a1 = { key: 'a1', role: 'Explore', model: 'opus', title: 'find callers', tokens: 5, status: 'working' };
+    const f = render(<Graph state={s} width={110} height={22} tickMs={0} />).lastFrame()!;
+    expect(f).toContain('advice');
+    expect(f).toContain('delegate');
   });
 
   it('does not crash on a tiny terminal', () => {
