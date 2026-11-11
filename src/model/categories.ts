@@ -2,7 +2,7 @@ import type { Block } from '../transcript/types.js';
 import type { Category } from './state.js';
 
 // Estimate only: the category is guessed from the tools a turn used.
-const TEST_COMMAND = /\b(test|vitest|jest|pytest|tsc|lint|build|cargo check|go vet)\b/;
+export const TEST_COMMAND = /\b(test|vitest|jest|pytest|tsc|lint|build|cargo check|go vet)\b/;
 
 export function categorize(blocks: Block[], hasEdited: boolean): Category {
   const tools = blocks.filter((b): b is Extract<Block, { type: 'tool_use' }> => b.type === 'tool_use');

@@ -23,6 +23,9 @@ describe('Log', () => {
     expect(f).toContain('session log');
     expect(f).toContain('● live');
   });
+  it('says so when there is nothing yet', () => {
+    expect(render(<Log entries={[]} rows={3} />).lastFrame()!).toContain('nothing yet');
+  });
   it('is fine with no entries', () => {
     expect(() => render(<Log entries={[]} rows={3} />).lastFrame()).not.toThrow();
   });

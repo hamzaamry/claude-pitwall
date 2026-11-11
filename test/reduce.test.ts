@@ -171,3 +171,53 @@ describe('statusAt', () => {
   });
   it('no activity time means no claim of idleness', () => expect(statusAt(a({ lastActivity: undefined }), T + 999_999)).toBe('working'));
 });
+
+describe('session log', () => {
+  const texts = (s: ReturnType<typeof emptyState>) => s.log.map((l) => `${l.who}: ${l.text}`);
+  const tool = (id: string, name: string, input: Record<string, unknown>, mid = id): TranscriptEvent =>
+    asst({ messageId: mid, blocks: [{ type: 'tool_use', id, name, input }] });
+
+  it('logs what the user asked', () => {
+    const s = emptyState('s');
+    applyEvent(s, 'main', { kind: 'userPrompt', time: '2026-11-11T10:00:00.000Z', text: 'fix the save bug' });
+    expect(texts(s)).toEqual(['you: fix the save bug']);
+  });
+
+  it('logs an edit with the file name', () => {
+    const s = emptyState('s');
+    applyEvent(s, 'main', tool('e1', 'Edit', { file_path: '/repo/app/GymPicker.tsx' }));
+    applyEvent(s, 'main', tool('w1', 'Write', { file_path: '/repo/notes.md' }));
+    expect(texts(s)).toEqual(['main: edited GymPicker.tsx', 'main: wrote notes.md']);
+  });
+
+  it('logs a test run', () => {
+    const s = emptyState('s');
+    applyEvent(s, 'main', tool('b1', 'Bash', { command: 'npx vitest run' }));
+    applyEvent(s, 'main', tool('b2', 'Bash', { command: 'ls -la' }));
+    expect(texts(s)).toEqual(['main: ran npx vitest run']);
+  });
+
+  it('logs the first use of a skill only', () => {
+    const s = emptyState('s');
+    applyEvent(s, 'main', tool('k1', 'Skill', { skill: 'brainstorming' }));
+    applyEvent(s, 'main', tool('k2', 'Skill', { skill: 'brainstorming' }));
+    expect(texts(s)).toEqual(['main: used skill brainstorming']);
+  });
+
+  it('logs when a helper finishes and when it fails, once', () => {
+    const s = emptyState('s');
+    registerSubagent(s, 'a1', { agentType: 'Explore', description: 'find callers', toolUseId: 'toolu_1' });
+    registerSubagent(s, 'a1', { agentType: 'Explore', description: 'find callers', toolUseId: 'toolu_1', finished: true });
+    registerSubagent(s, 'a1', { agentType: 'Explore', description: 'find callers', toolUseId: 'toolu_1', finished: true });
+    registerSubagent(s, 'a2', { agentType: 'general-purpose', description: 'check tests', toolUseId: 'toolu_2' });
+    applyEvent(s, 'main', { kind: 'toolResult', time: 't', toolUseId: 'toolu_2', isError: true, text: 'x' });
+    expect(texts(s)).toEqual(['Explore: finished find callers', 'general-purpose: failed check tests']);
+  });
+
+  it('a helper log line carries the helper role', () => {
+    const s = emptyState('s');
+    registerSubagent(s, 'a1', { agentType: 'Explore', description: 'x' });
+    applyEvent(s, 'a1', tool('e9', 'Edit', { file_path: '/a/b.ts' }));
+    expect(texts(s)).toEqual(['Explore: edited b.ts']);
+  });
+});

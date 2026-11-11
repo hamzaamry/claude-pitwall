@@ -32,7 +32,7 @@ function toBlock(b: Raw): Block | null {
 }
 
 // Slash commands and system notes are written as user lines but are not something the user asked for.
-const NOT_A_PROMPT = /^<(command-|local-command-|system-reminder|task-notification)/;
+const NOT_A_PROMPT = /^(<(command-|local-command-|system-reminder|task-notification)|\[Request interrupted)/;
 const isPrompt = (t: string) => !NOT_A_PROMPT.test(t.trimStart());
 
 export function parseLine(raw: string): TranscriptEvent | null {

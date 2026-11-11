@@ -32518,10 +32518,10 @@ var Output = class {
       transformers
     });
   }
-  clip(clip3) {
+  clip(clip4) {
     this.operations.push({
       type: "clip",
-      clip: clip3
+      clip: clip4
     });
   }
   unclip() {
@@ -32555,40 +32555,40 @@ var Output = class {
         const { text, transformers } = operation;
         let { x, y } = operation;
         let lines = text.split("\n");
-        const clip3 = clips.at(-1);
-        if (clip3) {
-          const clipHorizontally = typeof clip3?.x1 === "number" && typeof clip3?.x2 === "number";
-          const clipVertically = typeof clip3?.y1 === "number" && typeof clip3?.y2 === "number";
+        const clip4 = clips.at(-1);
+        if (clip4) {
+          const clipHorizontally = typeof clip4?.x1 === "number" && typeof clip4?.x2 === "number";
+          const clipVertically = typeof clip4?.y1 === "number" && typeof clip4?.y2 === "number";
           if (clipHorizontally) {
             const width = widestLine(text);
-            if (x + width < clip3.x1 || x > clip3.x2) {
+            if (x + width < clip4.x1 || x > clip4.x2) {
               continue;
             }
           }
           if (clipVertically) {
             const height = lines.length;
-            if (y + height < clip3.y1 || y > clip3.y2) {
+            if (y + height < clip4.y1 || y > clip4.y2) {
               continue;
             }
           }
           if (clipHorizontally) {
             lines = lines.map((line) => {
-              const from = x < clip3.x1 ? clip3.x1 - x : 0;
+              const from = x < clip4.x1 ? clip4.x1 - x : 0;
               const width = stringWidth(line);
-              const to = x + width > clip3.x2 ? clip3.x2 - x : width;
+              const to = x + width > clip4.x2 ? clip4.x2 - x : width;
               return sliceAnsi2(line, from, to);
             });
-            if (x < clip3.x1) {
-              x = clip3.x1;
+            if (x < clip4.x1) {
+              x = clip4.x1;
             }
           }
           if (clipVertically) {
-            const from = y < clip3.y1 ? clip3.y1 - y : 0;
+            const from = y < clip4.y1 ? clip4.y1 - y : 0;
             const height = lines.length;
-            const to = y + height > clip3.y2 ? clip3.y2 - y : height;
+            const to = y + height > clip4.y2 ? clip4.y2 - y : height;
             lines = lines.slice(from, to);
-            if (y < clip3.y1) {
-              y = clip3.y1;
+            if (y < clip4.y1) {
+              y = clip4.y1;
             }
           }
         }
@@ -34026,6 +34026,7 @@ var colors = {
 };
 function colorForRole(role) {
   if (role === "main") return colors.main;
+  if (role === "you") return colors.muted;
   if (role === "advisor") return colors.advisor;
   if (role === "runner") return colors.runner;
   return colors.sub;
@@ -34352,6 +34353,7 @@ function Log({ entries, rows, width }) {
       /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Text, { color: colors.dim, children: "session log" }),
       /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Text, { color: colors.done, children: "\u25CF live" })
     ] }),
+    shown.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Text, { color: colors.dim, children: "nothing yet" }) : null,
     shown.map((e, i) => /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(Text, { wrap: "truncate-end", children: [
       /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(Text, { color: colors.dim, children: [
         fmtClock(e.time),
@@ -34518,14 +34520,22 @@ function log(s, time, who, text) {
   s.log.push({ time, who, text });
   if (s.log.length > LOG_CAP) s.log.splice(0, s.log.length - LOG_CAP);
 }
+var clip3 = (t, n) => t.length > n ? t.slice(0, n - 1) + "\u2026" : t;
+var baseName = (p) => String(p ?? "").split("/").pop() || "a file";
+function settle(s, a, status, time) {
+  if (a.status === status || a.status === "failed" && status === "done") return;
+  a.status = status;
+  log(s, time, a.role, `${status === "done" ? "finished" : "failed"} ${a.title}`.trim());
+}
 function registerSubagent(s, key, meta) {
   const a = agentFor(s, key);
   a.role = meta.agentType;
   a.title = meta.description;
   if (meta.pickedEffortModel) a.model = modelAlias(meta.pickedEffortModel);
   if (meta.toolUseId) a.toolUseId = meta.toolUseId;
-  if (meta.toolUseId && s.failedToolUseIds.has(meta.toolUseId)) a.status = "failed";
-  else if (meta.finished && a.status !== "failed") a.status = "done";
+  const time = s.lastActivity ?? "";
+  if (meta.toolUseId && s.failedToolUseIds.has(meta.toolUseId)) settle(s, a, "failed", time);
+  else if (meta.finished) settle(s, a, "done", time);
 }
 function onToolUse(s, key, time, b) {
   const who = agentFor(s, key).role;
@@ -34539,7 +34549,16 @@ function onToolUse(s, key, time, b) {
     if (!name) return;
     const known = s.skills.find((k) => k.name === name && k.by === who);
     if (known) known.lastAt = time;
-    else s.skills.push({ name, by: who, firstAt: time, lastAt: time });
+    else {
+      s.skills.push({ name, by: who, firstAt: time, lastAt: time });
+      log(s, time, who, `used skill ${name}`);
+    }
+  } else if (b.name === "Edit" || b.name === "NotebookEdit") {
+    log(s, time, who, `edited ${baseName(b.input.file_path ?? b.input.notebook_path)}`);
+  } else if (b.name === "Write") {
+    log(s, time, who, `wrote ${baseName(b.input.file_path)}`);
+  } else if (b.name === "Bash" && TEST_COMMAND.test(String(b.input.command ?? ""))) {
+    log(s, time, who, `ran ${clip3(String(b.input.command), 50)}`);
   }
 }
 var EDIT_TOOLS = ["Edit", "Write", "NotebookEdit"];
@@ -34559,6 +34578,7 @@ function applyEvent(s, agentKey, e) {
       s.currentTask = e.text.length > 60 ? e.text.slice(0, 60) + "\u2026" : e.text;
       s.hasEdited = false;
       s.taskNo += 1;
+      log(s, e.time, "you", clip3(e.text, 80));
       s.categories = { coding: 0, reading: 0, talking: 0, planning: 0, tests: 0 };
     }
     return s;
@@ -34567,7 +34587,7 @@ function applyEvent(s, agentKey, e) {
     if (e.isError) {
       s.failedToolUseIds.add(e.toolUseId);
       const spawned = Object.values(s.agents).find((a) => a.toolUseId === e.toolUseId);
-      if (spawned) spawned.status = "failed";
+      if (spawned) settle(s, spawned, "failed", e.time);
     }
     return s;
   }
@@ -34688,7 +34708,7 @@ function toBlock(b) {
       return null;
   }
 }
-var NOT_A_PROMPT = /^<(command-|local-command-|system-reminder|task-notification)/;
+var NOT_A_PROMPT = /^(<(command-|local-command-|system-reminder|task-notification)|\[Request interrupted)/;
 var isPrompt = (t) => !NOT_A_PROMPT.test(t.trimStart());
 function parseLine(raw) {
   let d;

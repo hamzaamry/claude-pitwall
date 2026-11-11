@@ -53,6 +53,10 @@ describe('parseLine', () => {
     expect(parseLine(user('<local-command-caveat>x</local-command-caveat>'))).toBeNull();
     expect(parseLine(user('real text', { isMeta: true }))).toBeNull();
   });
+  it('skips the interrupt notice Claude Code writes as a user line', () => {
+    expect(parseLine(user('[Request interrupted by user for tool use]'))).toBeNull();
+    expect(parseLine(user('[Request interrupted by user]'))).toBeNull();
+  });
   it('takes the text of a prompt stored as an array (e.g. with an image)', () => {
     expect(parseLine(user([{ type: 'image', source: {} }, { type: 'text', text: 'fix this' }])))
       .toMatchObject({ kind: 'userPrompt', text: 'fix this' });

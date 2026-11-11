@@ -15,6 +15,7 @@ export function Log({ entries, rows, width }: { entries: LogEntry[]; rows: numbe
         <Text color={colors.dim}>session log</Text>
         <Text color={colors.done}>● live</Text>
       </Box>
+      {shown.length === 0 ? <Text color={colors.dim}>nothing yet</Text> : null}
       {shown.map((e, i) => (
         <Text key={i} wrap="truncate-end">
           <Text color={colors.dim}>{fmtClock(e.time)}  </Text>

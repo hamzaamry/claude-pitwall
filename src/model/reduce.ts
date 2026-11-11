@@ -1,6 +1,6 @@
 import type { Block, TranscriptEvent } from '../transcript/types.js';
 import { colorForRole, colors } from '../ui/theme.js';
-import { categorize } from './categories.js';
+import { categorize, TEST_COMMAND } from './categories.js';
 import type { AgentInfo, Category, SessionState } from './state.js';
 
 const LOG_CAP = 200;
@@ -24,6 +24,16 @@ function log(s: SessionState, time: string, who: string, text: string): void {
   if (s.log.length > LOG_CAP) s.log.splice(0, s.log.length - LOG_CAP);
 }
 
+const clip = (t: string, n: number) => (t.length > n ? t.slice(0, n - 1) + '…' : t);
+const baseName = (p: unknown) => String(p ?? '').split('/').pop() || 'a file';
+
+/** A helper finishing or failing is worth a log line, once. */
+function settle(s: SessionState, a: AgentInfo, status: 'done' | 'failed', time: string): void {
+  if (a.status === status || (a.status === 'failed' && status === 'done')) return;
+  a.status = status;
+  log(s, time, a.role, `${status === 'done' ? 'finished' : 'failed'} ${a.title}`.trim());
+}
+
 export function registerSubagent(
   s: SessionState, key: string,
   meta: { agentType: string; description: string; pickedEffortModel?: string; finished?: boolean; toolUseId?: string },
@@ -33,8 +43,9 @@ export function registerSubagent(
   a.title = meta.description;
   if (meta.pickedEffortModel) a.model = modelAlias(meta.pickedEffortModel);
   if (meta.toolUseId) a.toolUseId = meta.toolUseId;
-  if (meta.toolUseId && s.failedToolUseIds.has(meta.toolUseId)) a.status = 'failed';
-  else if (meta.finished && a.status !== 'failed') a.status = 'done';
+  const time = s.lastActivity ?? '';
+  if (meta.toolUseId && s.failedToolUseIds.has(meta.toolUseId)) settle(s, a, 'failed', time);
+  else if (meta.finished) settle(s, a, 'done', time);
 }
 
 function onToolUse(s: SessionState, key: string, time: string, b: Extract<Block, { type: 'tool_use' }>): void {
@@ -49,7 +60,16 @@ function onToolUse(s: SessionState, key: string, time: string, b: Extract<Block,
     if (!name) return;
     const known = s.skills.find((k) => k.name === name && k.by === who);
     if (known) known.lastAt = time;
-    else s.skills.push({ name, by: who, firstAt: time, lastAt: time });
+    else {
+      s.skills.push({ name, by: who, firstAt: time, lastAt: time });
+      log(s, time, who, `used skill ${name}`);
+    }
+  } else if (b.name === 'Edit' || b.name === 'NotebookEdit') {
+    log(s, time, who, `edited ${baseName(b.input.file_path ?? b.input.notebook_path)}`);
+  } else if (b.name === 'Write') {
+    log(s, time, who, `wrote ${baseName(b.input.file_path)}`);
+  } else if (b.name === 'Bash' && TEST_COMMAND.test(String(b.input.command ?? ''))) {
+    log(s, time, who, `ran ${clip(String(b.input.command), 50)}`);
   }
 }
 
@@ -74,6 +94,7 @@ export function applyEvent(s: SessionState, agentKey: string, e: TranscriptEvent
       s.currentTask = e.text.length > 60 ? e.text.slice(0, 60) + '…' : e.text;
       s.hasEdited = false;
       s.taskNo += 1;
+      log(s, e.time, 'you', clip(e.text, 80));
       s.categories = { coding: 0, reading: 0, talking: 0, planning: 0, tests: 0 };
     }
     return s;
@@ -85,7 +106,7 @@ export function applyEvent(s: SessionState, agentKey: string, e: TranscriptEvent
     if (e.isError) {
       s.failedToolUseIds.add(e.toolUseId);
       const spawned = Object.values(s.agents).find((a) => a.toolUseId === e.toolUseId);
-      if (spawned) spawned.status = 'failed';
+      if (spawned) settle(s, spawned, 'failed', e.time);
     }
     return s;
   }

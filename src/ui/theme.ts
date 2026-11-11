@@ -16,6 +16,7 @@ export const colors = {
 
 export function colorForRole(role: string): string {
   if (role === 'main') return colors.main;
+  if (role === 'you') return colors.muted;
   if (role === 'advisor') return colors.advisor;
   if (role === 'runner') return colors.runner;
   return colors.sub;
