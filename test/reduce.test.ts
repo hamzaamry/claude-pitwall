@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { emptyState, statusAt } from '../src/model/state.js';
 import { applyEvent, registerSubagent } from '../src/model/reduce.js';
+import { applyPitwallEvent } from '../src/events.js';
 import type { TranscriptEvent } from '../src/transcript/types.js';
 
 const usage = { input: 10, output: 5, cacheRead: 100, cacheWrite: 0 };
@@ -228,5 +229,101 @@ describe('configured advisor', () => {
     applyEvent(s, 'main', asst({ advisorModel: 'claude-opus-5-5' }));
     expect(s.advisorModel).toBe('opus');
     expect(s.advisorCalls).toHaveLength(0);
+  });
+});
+
+describe('reviewer calls, return flows and advisor triggers', () => {
+  const spawn = (id: string, type: string, prompt = 'review the diff', description = 'review'): TranscriptEvent =>
+    asst({ messageId: `m-${id}`, blocks: [{ type: 'tool_use', id, name: 'Agent', input: { description, subagent_type: type, prompt } }] });
+  const result = (id: string, text: string, isError = false): TranscriptEvent => ({ kind: 'toolResult', time: '2026-11-11T10:01:00.000Z', toolUseId: id, isError, text });
+
+  it.each(['approved', 'needs info', 'fix'])('a reviewer answer starting "%s" adds a reviewer call with that verdict', (verdict) => {
+    const s = emptyState('s');
+    applyEvent(s, 'main', spawn('r1', 'pitwall:reviewer'));
+    applyEvent(s, 'main', result('r1', `${verdict}\n1. app/x.ts:3 do this`));
+    expect(s.advisorCalls).toHaveLength(1);
+    expect(s.advisorCalls[0]).toMatchObject({ source: 'reviewer', why: 'final review', result: verdict, taskNo: s.taskNo });
+    expect(s.advisorCalls[0].text).toBe(`${verdict} 1. app/x.ts:3 do this`);
+  });
+
+  it('a result for another kind of agent adds no advisor call but queues a labelled return flow', () => {
+    const s = emptyState('s');
+    applyEvent(s, 'main', spawn('t1', 'pitwall:runner', 'npm test', 'run tests'));
+    s.pendingFlows.length = 0;
+    applyEvent(s, 'main', result('t1', '2 failed\nFAIL a.test.ts'));
+    expect(s.advisorCalls).toHaveLength(0);
+    expect(s.pendingFlows).toEqual([expect.objectContaining({ from: 't1', to: 'main', back: true, label: '2 failed' })]);
+  });
+
+  it('the return flow comes from the agent card when it is known', () => {
+    const s = emptyState('s');
+    applyEvent(s, 'main', spawn('t1', 'pitwall:scout', 'q', 'find x'));
+    registerSubagent(s, 'a9', { agentType: 'pitwall:scout', description: 'find x', toolUseId: 't1' });
+    s.pendingFlows.length = 0;
+    applyEvent(s, 'main', result('t1', 'app/a.ts:3 thing\nconfidence: high'));
+    expect(s.pendingFlows[0]).toMatchObject({ from: 'a9', to: 'main', back: true });
+  });
+
+  it('a result for a tool that is not an Agent call queues nothing', () => {
+    const s = emptyState('s');
+    applyEvent(s, 'main', result('some-read', 'file contents'));
+    expect(s.pendingFlows).toEqual([]);
+    expect(s.advisorCalls).toEqual([]);
+  });
+
+  it('an ASK-OPUS: prompt makes an ask-opus call and sets that trigger', () => {
+    const s = emptyState('s');
+    applyEvent(s, 'main', spawn('q1', 'pitwall:reviewer', 'ASK-OPUS:\nwhy is x slow?'));
+    applyEvent(s, 'main', result('q1', 'Because of y.'));
+    expect(s.advisorCalls[0]).toMatchObject({ source: 'reviewer', why: 'ask-opus' });
+    expect(s.triggers.askOpus).toBe('done');
+  });
+
+  it('labels are cut to 24 characters and never contain a newline', () => {
+    const s = emptyState('s');
+    applyEvent(s, 'main', spawn('t1', 'pitwall:scout'));
+    s.pendingFlows.length = 0;
+    applyEvent(s, 'main', result('t1', '\n\n' + 'x'.repeat(60) + '\nsecond line'));
+    expect(s.pendingFlows[0].label).toHaveLength(24);
+    expect(s.pendingFlows[0].label).not.toContain('\n');
+  });
+
+  it('a failed reviewer call is not counted as advice', () => {
+    const s = emptyState('s');
+    applyEvent(s, 'main', spawn('r1', 'pitwall:reviewer'));
+    applyEvent(s, 'main', result('r1', 'tool error', true));
+    expect(s.advisorCalls).toEqual([]);
+  });
+
+  it('triggers follow the sequence and reset on a new prompt', () => {
+    const s = emptyState('s');
+    expect(s.triggers).toEqual({ planCheck: 'todo', stuck: 'todo', finalReview: 'todo', askOpus: 'todo' });
+    applyEvent(s, 'main', asst({ messageId: 'adv1', advisorUsage: { input: 100, output: 10, cacheRead: 0, cacheWrite: 0 } }));
+    expect(s.triggers.planCheck).toBe('done');
+    applyEvent(s, 'main', asst({ messageId: 'e1', blocks: [{ type: 'tool_use', id: 'e1', name: 'Edit', input: { file_path: '/a/b.ts' } }] }));
+    expect(s.triggers.finalReview).toBe('next');
+    applyPitwallEvent(s, { t: '2026-11-11T10:05:00.000Z', event: 'Nudge', session: 's', kind: 'same-error' });
+    expect(s.triggers.stuck).toBe('on');
+    applyEvent(s, 'main', asst({ messageId: 'adv2', advisorUsage: { input: 100, output: 10, cacheRead: 0, cacheWrite: 0 } }));
+    expect(s.triggers.stuck).toBe('done');
+    applyEvent(s, 'main', spawn('r1', 'pitwall:reviewer'));
+    applyEvent(s, 'main', result('r1', 'approved'));
+    expect(s.triggers.finalReview).toBe('done');
+    applyEvent(s, 'main', { kind: 'userPrompt', time: 't', text: 'next task' });
+    expect(s.triggers).toEqual({ planCheck: 'todo', stuck: 'todo', finalReview: 'todo', askOpus: 'todo' });
+  });
+
+  it('an advisor call after an edit is not a plan check', () => {
+    const s = emptyState('s');
+    applyEvent(s, 'main', asst({ messageId: 'e1', blocks: [{ type: 'tool_use', id: 'e1', name: 'Edit', input: { file_path: '/a/b.ts' } }] }));
+    applyEvent(s, 'main', asst({ messageId: 'adv1', advisorUsage: { input: 100, output: 10, cacheRead: 0, cacheWrite: 0 } }));
+    expect(s.triggers.planCheck).toBe('todo');
+  });
+
+  it('a nudge that came before the latest advisor call is already answered', () => {
+    const s = emptyState('s');
+    applyEvent(s, 'main', asst({ messageId: 'adv1', time: '2026-11-11T10:10:00.000Z', advisorUsage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 } }));
+    applyPitwallEvent(s, { t: '2026-11-11T10:05:00.000Z', event: 'Nudge', session: 's', kind: 'same-error' });
+    expect(s.triggers.stuck).toBe('done');
   });
 });

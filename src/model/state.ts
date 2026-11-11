@@ -4,9 +4,13 @@ export type Category = 'coding' | 'reading' | 'talking' | 'planning' | 'tests';
 export type AgentInfo = { key: string; role: string; model: string; effort?: string; title: string;
   tokens: number; status: 'working' | 'idle' | 'done' | 'failed'; startedAt?: string; finishedAt?: string;
   toolUseId?: string; lastActivity?: string };
-export type AdvisorCall = { time: string; source: 'native' | 'reviewer'; why: string; result?: string; tokens: number; text?: string };
+export type AdvisorCall = { time: string; source: 'native' | 'reviewer'; why: string; result?: string; tokens: number; text?: string; taskNo: number };
+export type Triggers = {
+  planCheck: 'todo' | 'done'; stuck: 'todo' | 'on' | 'done'; finalReview: 'todo' | 'next' | 'done'; askOpus: 'todo' | 'done';
+};
+export const freshTriggers = (): Triggers => ({ planCheck: 'todo', stuck: 'todo', finalReview: 'todo', askOpus: 'todo' });
 export type LogEntry = { time: string; who: string; text: string };
-export type Flow = { from: string; to: string; label: string; color: string; tries?: number; at?: string };
+export type Flow = { from: string; to: string; label: string; color: string; tries?: number; at?: string; back?: boolean };
 export type SessionState = {
   sessionId: string; currentTask: string; startedAt?: string; lastActivity?: string;
   agents: Record<string, AgentInfo>;      // key 'main' + one per subagent id
@@ -20,6 +24,8 @@ export type SessionState = {
   teamOn?: boolean;                       // undefined until the pitwall hooks have written an events file
   nudges: Record<string, string>;         // hook nudges by kind -> time
   advisorModel?: string;                  // set on every assistant line once an advisor is configured
+  triggers: Triggers;                     // advisor trigger states of the current task
+  spawns: Map<string, { from: string; type: string; askOpus: boolean }>;  // Agent tool_use id -> who asked for what
   taskNo: number;                         // counts main user prompts; categories belong to the current one
   // bookkeeping for messages written on several lines (one line per content block)
   msgInfo: Map<string, { tokens: number; blocks: Block[]; category: Category; task: number }>;
@@ -38,7 +44,7 @@ export function emptyState(sessionId: string): SessionState {
   return {
     sessionId, currentTask: '', agents: {}, seenMessageIds: new Set(), skills: [], advisorCalls: [],
     categories: { coding: 0, reading: 0, talking: 0, planning: 0, tests: 0 },
-    log: [], pendingFlows: [], hasEdited: false, taskNo: 0, nudges: {},
+    log: [], pendingFlows: [], hasEdited: false, taskNo: 0, nudges: {}, triggers: freshTriggers(), spawns: new Map(),
     msgInfo: new Map(), seenToolIds: new Set(), failedToolUseIds: new Set(),
   };
 }

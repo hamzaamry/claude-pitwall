@@ -2,7 +2,7 @@ import type { Block, TranscriptEvent } from '../transcript/types.js';
 import { oneLine } from '../oneLine.js';
 import { colorForRole, colors } from '../ui/theme.js';
 import { categorize, TEST_COMMAND } from './categories.js';
-import type { AgentInfo, Category, SessionState } from './state.js';
+import { freshTriggers, type AgentInfo, type Category, type SessionState } from './state.js';
 
 const LOG_CAP = 200;
 
@@ -55,6 +55,7 @@ function onToolUse(s: SessionState, key: string, time: string, b: Extract<Block,
     const description = oneLine(String(b.input.description ?? ''));
     const type = String(b.input.subagent_type ?? 'general-purpose');
     s.pendingFlows.push({ from: key, to: b.id, label: description, color: colorForRole(type), at: time });
+    s.spawns.set(b.id, { from: key, type, askOpus: String(b.input.prompt ?? '').trimStart().startsWith('ASK-OPUS:') });
     log(s, time, who, `${who} → ${type}: ${description}`);
   } else if (b.name === 'Skill') {
     const name = String(b.input.skill ?? '');
@@ -72,6 +73,26 @@ function onToolUse(s: SessionState, key: string, time: string, b: Extract<Block,
   } else if (b.name === 'Bash' && TEST_COMMAND.test(String(b.input.command ?? ''))) {
     log(s, time, who, `ran ${clip(String(b.input.command), 50)}`);
   }
+}
+
+const VERDICT = /^(approved|needs info|fix)\b/i;
+const isReviewer = (type: string) => /(^|:)reviewer$/.test(type);
+const firstLine = (t: string) => t.split('\n').map((l) => l.trim()).find(Boolean) ?? '';
+
+/** An Agent tool call came back: draw the answer travelling home, and count a reviewer answer as advice. */
+function onAgentResult(s: SessionState, e: Extract<TranscriptEvent, { kind: 'toolResult' }>): void {
+  const spawn = s.spawns.get(e.toolUseId);
+  if (!spawn) return;
+  const card = Object.values(s.agents).find((a) => a.toolUseId === e.toolUseId);
+  s.pendingFlows.push({ from: card?.key ?? e.toolUseId, to: spawn.from, back: true, at: e.time,
+    label: oneLine(firstLine(e.text)).slice(0, 24), color: colorForRole(spawn.type) });
+  if (!isReviewer(spawn.type) || e.isError) return;
+  const verdict = firstLine(e.text).match(VERDICT)?.[1].toLowerCase();
+  const askOpus = spawn.askOpus;
+  s.advisorCalls.push({ time: e.time, source: 'reviewer', why: askOpus ? 'ask-opus' : 'final review',
+    result: askOpus ? undefined : verdict, text: oneLine(e.text), tokens: card?.tokens ?? 0, taskNo: s.taskNo });
+  if (askOpus) s.triggers.askOpus = 'done'; else s.triggers.finalReview = 'done';
+  log(s, e.time, 'reviewer', askOpus ? 'answered' : `verdict: ${verdict ?? 'unclear'}`);
 }
 
 const EDIT_TOOLS = ['Edit', 'Write', 'NotebookEdit'];
@@ -95,6 +116,7 @@ export function applyEvent(s: SessionState, agentKey: string, e: TranscriptEvent
       s.currentTask = e.text.length > 60 ? e.text.slice(0, 60) + '…' : e.text;
       s.hasEdited = false;
       s.taskNo += 1;
+      s.triggers = freshTriggers();
       log(s, e.time, 'you', clip(e.text, 80));
       s.categories = { coding: 0, reading: 0, talking: 0, planning: 0, tests: 0 };
     }
@@ -102,6 +124,7 @@ export function applyEvent(s: SessionState, agentKey: string, e: TranscriptEvent
   }
 
   if (e.kind === 'toolResult') {
+    onAgentResult(s, e);
     // A subagent has failed only when its Agent call came back as an error, not when it hit
     // an ordinary tool error on the way (a missing file or a grep with no match is normal).
     if (e.isError) {
@@ -127,7 +150,9 @@ export function applyEvent(s: SessionState, agentKey: string, e: TranscriptEvent
     if (e.advisorUsage) {
       const u = e.advisorUsage;
       const tokens = u.input + u.output + u.cacheRead + u.cacheWrite;
-      s.advisorCalls.push({ time: e.time, source: 'native', why: 'native advice', tokens });
+      s.advisorCalls.push({ time: e.time, source: 'native', why: 'native advice', tokens, taskNo: s.taskNo });
+      if (!s.hasEdited && s.triggers.planCheck === 'todo') s.triggers.planCheck = 'done';
+      if (s.triggers.stuck === 'on') s.triggers.stuck = 'done';
       s.pendingFlows.push({ from: agentKey, to: 'advisor', label: 'advice 🔒', color: colors.advisor, at: e.time });
       log(s, e.time, 'advisor', 'advice 🔒');
     }
@@ -144,7 +169,10 @@ export function applyEvent(s: SessionState, agentKey: string, e: TranscriptEvent
     info!.blocks.push(slim(b));
     if (b.type === 'tool_use') {
       onToolUse(s, agentKey, e.time, b);
-      if (agentKey === 'main' && EDIT_TOOLS.includes(b.name)) s.hasEdited = true;
+      if (agentKey === 'main' && EDIT_TOOLS.includes(b.name)) {
+        s.hasEdited = true;
+        if (s.triggers.finalReview === 'todo') s.triggers.finalReview = 'next';
+      }
     }
   }
 

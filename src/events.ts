@@ -28,5 +28,10 @@ export function applyPitwallEvent(s: SessionState, e: PitwallEvent): void {
     if (a) settle(s, a, 'done', e.t);
   } else if (e.event === 'Nudge' && e.kind) {
     s.nudges[e.kind] = e.t;
+    if (e.kind === 'same-error') {
+      const last = s.advisorCalls[s.advisorCalls.length - 1];
+      // an advisor call that already came after the nudge has answered it
+      s.triggers.stuck = last && Date.parse(last.time) >= Date.parse(e.t) ? 'done' : 'on';
+    }
   }
 }
