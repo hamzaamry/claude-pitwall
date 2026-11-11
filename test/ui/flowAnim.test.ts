@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { stepFlows, type ActiveFlow } from '../../src/ui/flowAnim.js';
+import { dotCell, stepFlows, type ActiveFlow } from '../../src/ui/flowAnim.js';
 import type { GraphLayout } from '../../src/ui/graphLayout.js';
 import type { Flow } from '../../src/model/state.js';
 
@@ -55,6 +55,35 @@ describe('stepFlows: a card that has not appeared yet', () => {
     const a = stepFlows([], pending, later);
     expect(a).toHaveLength(1);
     expect(a[0].wireIndex).toBe(2);
+    expect(pending).toHaveLength(0);
+  });
+});
+
+describe('return flows (back: true)', () => {
+  const back = (from: string): Flow => ({ from, to: 'main', label: 'done', color: '#fff', back: true });
+
+  it('matches the wire by the card key or by the tool_use id', () => {
+    expect(stepFlows([], [back('a1')], layout)[0].wireIndex).toBe(0);
+    expect(stepFlows([], [back('toolu_1')], layout)[0].wireIndex).toBe(0);
+  });
+  it('starts at the card end of the wire and walks to main, one cell per tick, then leaves', () => {
+    let a: ActiveFlow[] = stepFlows([], [back('a1')], layout);
+    expect(dotCell(a[0], layout)).toEqual([0, 2]);
+    a = stepFlows(a, [], layout);
+    expect(dotCell(a[0], layout)).toEqual([0, 1]);
+    a = stepFlows(a, [], layout);
+    expect(dotCell(a[0], layout)).toEqual([0, 0]);
+    expect(stepFlows(a, [], layout)).toEqual([]);
+  });
+  it('a forward flow still starts at the main end', () => {
+    const a = stepFlows([], [flow('a1')], layout);
+    expect(dotCell(a[0], layout)).toEqual([0, 0]);
+  });
+  it('a return flow of a card that is not on screen waits, then is dropped', () => {
+    const pending = [back('ghost')];
+    stepFlows([], pending, layout);
+    expect(pending).toHaveLength(1);
+    for (let i = 0; i < 30; i++) stepFlows([], pending, layout);
     expect(pending).toHaveLength(0);
   });
 });

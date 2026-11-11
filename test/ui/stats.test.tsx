@@ -86,6 +86,32 @@ describe('Stats: WHERE TOKENS WENT', () => {
   });
 });
 
+describe('Stats: advisor budget and reviewer advice', () => {
+  const call = (taskNo: number, over: object = {}) => ({ time: '2026-11-11T11:59:00.000Z', source: 'native' as const, why: 'native advice', tokens: 100, taskNo, ...over });
+  it('counts only the calls of the current task against the target of about 2', () => {
+    const s = emptyState('s');
+    s.taskNo = 4;
+    s.advisorCalls.push(call(3), call(3), call(4), call(4), call(4));
+    expect(frame(s)).toContain('this task 3 · target ~2');
+  });
+  it('shows the budget with no calls once an advisor is configured', () => {
+    const s = emptyState('s');
+    s.advisorModel = 'opus';
+    expect(frame(s)).toContain('this task 0 · target ~2');
+  });
+  it('a reviewer call shows its verdict badge and its full text as latest advice, wrapped', () => {
+    const s = emptyState('s');
+    const text = 'fix 1. app/GymPicker.tsx:58 wait for the store before reading the gym id 2. db/gyms.ts:10 add the missing index';
+    s.advisorCalls.push(call(0, { source: 'reviewer', why: 'final review', result: 'fix', text }));
+    const f = frame(s);
+    expect(f).toContain('[fix]');
+    expect(f).toContain('latest advice');
+    const flat = f.replace(/[│╭╮╰╯─]/g, ' ').replace(/\s+/g, ' ');
+    expect(flat).toContain('GymPicker.tsx:58 wait for the store');
+    expect(flat).toContain('add the missing index');
+  });
+});
+
 describe('Stats: width', () => {
   it('fits a narrower width', () => {
     const s = emptyState('s');

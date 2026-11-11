@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text } from 'ink';
 import { statusAt, type AgentInfo, type SessionState } from '../model/state.js';
 import { oneLine } from '../oneLine.js';
-import { stepFlows, type ActiveFlow } from './flowAnim.js';
+import { dotCell, stepFlows, type ActiveFlow } from './flowAnim.js';
 import { effortText, fmtTokens } from './format.js';
 import { layoutGraph, type GraphLayout } from './graphLayout.js';
 import { colorForRole, colors } from './theme.js';
@@ -120,7 +120,7 @@ function drawWireLabels(g: Grid, layout: GraphLayout): void {
 
 function drawDots(g: Grid, layout: GraphLayout, active: ActiveFlow[]): void {
   for (const f of active) {
-    const cell = layout.wires[f.wireIndex]?.cells[f.pos];
+    const cell = dotCell(f, layout);
     if (!cell) continue;
     put(g, cell[0], cell[1], '●', f.color);
     const label = ` ${clip(f.label, 22)} `;
@@ -129,7 +129,13 @@ function drawDots(g: Grid, layout: GraphLayout, active: ActiveFlow[]): void {
   }
 }
 
-const TRIGGERS = ['plan check', 'stuck', 'final review', '/ask-opus'];
+const TRIGGERS: [string, keyof SessionState['triggers']][] = [
+  ['plan check', 'planCheck'], ['stuck', 'stuck'], ['final review', 'finalReview'], ['/ask-opus', 'askOpus'],
+];
+const MARK: Record<string, { text: string; color: string }> = {
+  todo: { text: '○', color: colors.dim }, on: { text: '●', color: colors.advisor },
+  done: { text: '✓', color: colors.done }, next: { text: 'next', color: colors.warning },
+};
 
 function drawAdvisor(g: Grid, b: Rect, state: SessionState): void {
   const calls = state.advisorCalls;
@@ -142,7 +148,10 @@ function drawAdvisor(g: Grid, b: Rect, state: SessionState): void {
   if (configured) put(g, b.x + 2, b.y + 3, clip(`${fmtTokens(calls.reduce((n, c) => n + c.tokens, 0))} tokens`, b.w - 4), colors.dim);
   for (let x = b.x + 1; x < b.x + b.w - 1; x++) put(g, x, b.y + 4, '─', colors.frame);
   put(g, b.x + 2, b.y + 5, 'called when', colors.dim);
-  TRIGGERS.forEach((t, i) => putSplit(g, b, 7 + i, t, color, '○', color));
+  TRIGGERS.forEach(([label, key], i) => {
+    const m = MARK[state.triggers[key]];
+    putSplit(g, b, 7 + i, label, color, m.text, m.color);
+  });
   put(g, b.x + 2, b.y + Math.max(12, b.h - 3), 'on call', colors.dim);
   put(g, b.x + 2, b.y + Math.max(13, b.h - 2), clip('never edits code', b.w - 4), colors.dim);
 }

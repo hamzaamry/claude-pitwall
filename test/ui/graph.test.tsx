@@ -87,6 +87,18 @@ describe('Graph', () => {
     expect(f).toContain('no calls yet');
   });
 
+  it('draws the trigger states: done, on, next and todo', () => {
+    const s = base();
+    s.advisorCalls.push({ time: 't', source: 'native', why: 'native advice', tokens: 10, taskNo: 0 });
+    s.triggers = { planCheck: 'done', stuck: 'on', finalReview: 'next', askOpus: 'todo' };
+    const f = render(<Graph state={s} width={110} height={26} tickMs={0} />).lastFrame()!;
+    const line = (name: string) => f.split('\n').find((l) => l.includes(name))!;
+    expect(line('plan check')).toContain('✓');
+    expect(line('stuck')).toContain('●');
+    expect(line('final review')).toContain('next');
+    expect(line('/ask-opus')).toContain('○');
+  });
+
   it('does not crash on a tiny terminal', () => {
     expect(() => render(<Graph state={base()} width={12} height={5} tickMs={0} />).lastFrame()).not.toThrow();
   });

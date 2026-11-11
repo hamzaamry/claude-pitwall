@@ -29,6 +29,23 @@ export function percentages(cats: Record<Category, number>): Record<Category, nu
   return out;
 }
 
+const TARGET_CALLS = 2; // advisor and reviewer calls per task worth aiming for; shown, never enforced
+
+/** Word-wrap to `width` columns, at most `maxLines` lines (the last one ends with … when cut). */
+function wrap(text: string, width: number, maxLines: number): string[] {
+  const lines: string[] = [];
+  let cur = '';
+  for (const word of text.split(' ')) {
+    if (cur && (cur + ' ' + word).length > width) { lines.push(cur); cur = word.slice(0, width); }
+    else cur = cur ? cur + ' ' + word : word.slice(0, width);
+  }
+  if (cur) lines.push(cur);
+  if (lines.length <= maxLines) return lines;
+  const cut = lines.slice(0, maxLines);
+  cut[maxLines - 1] = clip(cut[maxLines - 1] + '…', width);
+  return cut;
+}
+
 const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 const bar = (pct: number) => {
   const filled = Math.max(0, Math.min(10, Math.round(pct / 10)));
@@ -67,6 +84,7 @@ export function Stats({ state, limits, now, width = STATS_WIDTH }: { state: Sess
   const pct = percentages(state.categories);
   const calls = state.advisorCalls;
   const last = calls[calls.length - 1];
+  const thisTask = calls.filter((c) => c.taskNo === state.taskNo).length;
   return (
     <Box flexDirection="column" width={width}>
       <Section width={width} title="LIMITS">
@@ -81,6 +99,9 @@ export function Stats({ state, limits, now, width = STATS_WIDTH }: { state: Sess
         )}
       </Section>
       <Section width={width} title="ADVISOR" titleColor={colors.advisor} right={`${state.advisorModel ?? 'opus'} · ${calls.length} call${calls.length === 1 ? '' : 's'}`}>
+        {state.advisorModel || calls.length > 0 ? (
+          <Text color={thisTask > TARGET_CALLS ? colors.warning : colors.dim}>this task {thisTask} · target ~{TARGET_CALLS}</Text>
+        ) : null}
         {calls.length === 0 ? <Text color={colors.dim}>not called yet</Text> : (
           <>
             <Text color={colors.dim}>{fmtTokens(calls.reduce((n, c) => n + c.tokens, 0))} tokens</Text>
@@ -92,9 +113,9 @@ export function Stats({ state, limits, now, width = STATS_WIDTH }: { state: Sess
               </Text>
             ))}
             <Text color={colors.dim}>latest advice</Text>
-            <Text color={colors.bright}>
-              {clip(last.source === 'reviewer' && last.text ? last.text : '🔒 native advice (encrypted)', inner)}
-            </Text>
+            {wrap(last.source === 'reviewer' && last.text ? last.text : '🔒 native advice (encrypted)', inner, 5).map((l, i) => (
+              <Text key={i} color={colors.bright}>{l}</Text>
+            ))}
           </>
         )}
       </Section>

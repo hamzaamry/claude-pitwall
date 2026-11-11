@@ -20,12 +20,21 @@ export function stepFlows(active: ActiveFlow[], pending: Flow[], layout: GraphLa
   let looked = pending.length;
   while (next.length < MAX_DOTS && looked-- > 0) {
     const flow = pending.shift()!;
-    const wireIndex = layout.wires.findIndex(
-      (w) => w.from === flow.from && (w.to === flow.to || w.toolUseId === flow.to),
-    );
+    // A forward flow goes from its sender along the wire to `to` (a card key or a tool_use id);
+    // a return flow (back) is named by the card it comes from and walks the same wire home.
+    const wireIndex = layout.wires.findIndex((w) => flow.back
+      ? w.from === flow.to && (w.to === flow.from || w.toolUseId === flow.from)
+      : w.from === flow.from && (w.to === flow.to || w.toolUseId === flow.to));
     if (wireIndex !== -1) next.push({ ...flow, wireIndex, pos: 0 });
     else if ((flow.tries ?? 0) + 1 < MAX_TRIES) retry.push({ ...flow, tries: (flow.tries ?? 0) + 1 });
   }
   pending.unshift(...retry);
   return next;
+}
+
+/** Where a dot is drawn: forward flows start at the main end of their wire, return flows at the card end. */
+export function dotCell(f: ActiveFlow, layout: GraphLayout): [number, number] | undefined {
+  const cells = layout.wires[f.wireIndex]?.cells;
+  if (!cells) return undefined;
+  return cells[f.back ? cells.length - 1 - f.pos : f.pos];
 }
