@@ -4,12 +4,12 @@ import { readLimits } from './limits.js';
 import { Graph } from './ui/Graph.js';
 import { Header, headerHeight } from './ui/Header.js';
 import { Log, logHeight } from './ui/Log.js';
-import { Stats } from './ui/Stats.js';
+import { STATS_WIDTH, Stats } from './ui/Stats.js';
 import { colors } from './ui/theme.js';
 import { SessionWatcher } from './watcher.js';
 
-const STATS_MIN_WIDTH = 160;
-const STATS_WIDTH = 40;
+// Sidebar width by terminal width: full from 160 columns, narrower from 100, hidden below that.
+const sidebarWidth = (w: number) => (w >= 160 ? STATS_WIDTH : w >= 100 ? 34 : 0);
 const LOG_ROWS = 7;
 
 function useTermSize(width?: number, height?: number): { width: number; height: number } {
@@ -51,8 +51,9 @@ export function App({ cwd, home, sessionId, width, height, pollMs = 500, tickMs 
     return <Text color={colors.dim}>waiting for a Claude Code session in {watcher.dir}</Text>;
   }
 
-  const showStats = size.width >= STATS_MIN_WIDTH;
-  const graphWidth = showStats ? size.width - STATS_WIDTH - 1 : size.width;
+  const side = sidebarWidth(size.width);
+  const showStats = side > 0;
+  const graphWidth = showStats ? size.width - side - 1 : size.width;
   const graphHeight = Math.max(16, size.height - headerHeight(state, size.width) - logHeight(LOG_ROWS) - 1);
   const limits = readLimits(state.sessionId, home);
 
@@ -64,7 +65,7 @@ export function App({ cwd, home, sessionId, width, height, pollMs = 500, tickMs 
           <Graph state={state} width={graphWidth} height={graphHeight} tickMs={tickMs} />
           <Log entries={state.log} rows={LOG_ROWS} width={graphWidth} />
         </Box>
-        {showStats ? <Box marginLeft={1}><Stats state={state} limits={limits} now={now} /></Box> : null}
+        {showStats ? <Box marginLeft={1}><Stats state={state} limits={limits} now={now} width={side} /></Box> : null}
       </Box>
       <Text backgroundColor={colors.pill} wrap="truncate-end">
         <Text color={colors.bright}> $ pitwall watch</Text>

@@ -5,7 +5,7 @@ import type { Category, SessionState } from '../model/state.js';
 import { fmtClock, fmtTokens } from './format.js';
 import { colorForRole, colors } from './theme.js';
 
-const WIDTH = 40;
+export const STATS_WIDTH = 40;
 const ACTIVE_SKILL_MS = 2 * 60 * 1000;
 const CATEGORIES: Category[] = ['coding', 'reading', 'talking', 'planning', 'tests'];
 const LABEL: Record<Category, string> = { coding: 'coding', reading: 'reading files', talking: 'talking', planning: 'planning', tests: 'test output' };
@@ -35,11 +35,11 @@ const bar = (pct: number) => {
   return '█'.repeat(filled) + '░'.repeat(10 - filled);
 };
 
-function Section({ title, right, titleColor = colors.dim, children }: {
-  title: string; right?: string; titleColor?: string; children: React.ReactNode;
+function Section({ title, right, titleColor = colors.dim, width, children }: {
+  title: string; right?: string; titleColor?: string; width: number; children: React.ReactNode;
 }) {
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={colors.frame} width={WIDTH} paddingX={1}>
+    <Box flexDirection="column" borderStyle="round" borderColor={colors.frame} width={width} paddingX={1}>
       <Box justifyContent="space-between">
         <Text bold color={titleColor}>{title}</Text>
         {right ? <Text color={colors.dim}>{right}</Text> : null}
@@ -62,14 +62,14 @@ function LimitRow({ label, pct, note, color }: { label: string; pct: number; not
   );
 }
 
-export function Stats({ state, limits, now }: { state: SessionState; limits: Limits | null; now: number }) {
-  const inner = WIDTH - 4;
+export function Stats({ state, limits, now, width = STATS_WIDTH }: { state: SessionState; limits: Limits | null; now: number; width?: number }) {
+  const inner = width - 4;
   const pct = percentages(state.categories);
   const calls = state.advisorCalls;
   const last = calls[calls.length - 1];
   return (
-    <Box flexDirection="column" width={WIDTH}>
-      <Section title="LIMITS">
+    <Box flexDirection="column" width={width}>
+      <Section width={width} title="LIMITS">
         {limits === null ? <Text color={colors.dim}>run /pitwall:setup to see limits</Text> : (
           <>
             {limits.contextPct !== undefined ? <LimitRow label="context" pct={limits.contextPct} color={limits.contextPct >= 80 ? colors.warning : colors.main} /> : null}
@@ -80,7 +80,7 @@ export function Stats({ state, limits, now }: { state: SessionState; limits: Lim
           </>
         )}
       </Section>
-      <Section title="ADVISOR" titleColor={colors.advisor} right={`opus · ${calls.length} call${calls.length === 1 ? '' : 's'}`}>
+      <Section width={width} title="ADVISOR" titleColor={colors.advisor} right={`opus · ${calls.length} call${calls.length === 1 ? '' : 's'}`}>
         {calls.length === 0 ? <Text color={colors.dim}>not called yet</Text> : (
           <>
             <Text color={colors.dim}>{fmtTokens(calls.reduce((n, c) => n + c.tokens, 0))} tokens</Text>
@@ -98,16 +98,16 @@ export function Stats({ state, limits, now }: { state: SessionState; limits: Lim
           </>
         )}
       </Section>
-      <Section title="WHERE TOKENS WENT · this task">
+      <Section width={width} title="WHERE TOKENS WENT · this task">
         {CATEGORIES.map((c) => (
           <Text key={c}>
-            <Text>{LABEL[c].padEnd(14)}</Text>
+            <Text>{(width < 38 ? LABEL[c].slice(0, 8).padEnd(9) : LABEL[c].padEnd(14))}</Text>
             <Text color={c === 'coding' ? colors.done : colors.muted}>{bar(pct[c])}</Text>
             <Text> {pct[c]}%</Text>
           </Text>
         ))}
       </Section>
-      <Section title="SKILLS · this session" right="used by">
+      <Section width={width} title="SKILLS · this session" right="used by">
         {state.skills.length === 0 ? <Text color={colors.dim}>none yet</Text> : state.skills.map((k) => {
           const active = now - Date.parse(k.lastAt) < ACTIVE_SKILL_MS;
           return (

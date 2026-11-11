@@ -33969,7 +33969,7 @@ function pickCards(subs, fit) {
   return [...live, ...finished].slice(0, fit).sort((p, q) => p.i - q.i).map((r) => r.a);
 }
 function layoutGraph(agents, width, height) {
-  const advW = Math.min(ADVISOR_W, Math.max(8, Math.floor(width / 4)));
+  const advW = Math.min(ADVISOR_W, Math.max(width >= 60 ? 20 : 8, Math.floor(width / 4)));
   const advH = Math.max(MAIN_H, height);
   const areaX = advW + 2;
   const areaW = Math.max(1, width - areaX);
@@ -34365,7 +34365,7 @@ function Log({ entries, rows, width }) {
 
 // src/ui/Stats.tsx
 var import_jsx_runtime4 = __toESM(require_jsx_runtime(), 1);
-var WIDTH = 40;
+var STATS_WIDTH = 40;
 var ACTIVE_SKILL_MS = 2 * 60 * 1e3;
 var CATEGORIES = ["coding", "reading", "talking", "planning", "tests"];
 var LABEL = { coding: "coding", reading: "reading files", talking: "talking", planning: "planning", tests: "test output" };
@@ -34390,8 +34390,8 @@ var bar2 = (pct) => {
   const filled = Math.max(0, Math.min(10, Math.round(pct / 10)));
   return "\u2588".repeat(filled) + "\u2591".repeat(10 - filled);
 };
-function Section({ title, right, titleColor = colors.dim, children }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Box_default, { flexDirection: "column", borderStyle: "round", borderColor: colors.frame, width: WIDTH, paddingX: 1, children: [
+function Section({ title, right, titleColor = colors.dim, width, children }) {
+  return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Box_default, { flexDirection: "column", borderStyle: "round", borderColor: colors.frame, width, paddingX: 1, children: [
     /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Box_default, { justifyContent: "space-between", children: [
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { bold: true, color: titleColor, children: title }),
       right ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.dim, children: right }) : null
@@ -34413,13 +34413,13 @@ function LimitRow({ label, pct, note, color }) {
     note ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.dim, children: note }) : null
   ] });
 }
-function Stats({ state, limits, now }) {
-  const inner = WIDTH - 4;
+function Stats({ state, limits, now, width = STATS_WIDTH }) {
+  const inner = width - 4;
   const pct = percentages(state.categories);
   const calls = state.advisorCalls;
   const last = calls[calls.length - 1];
-  return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Box_default, { flexDirection: "column", width: WIDTH, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Section, { title: "LIMITS", children: limits === null ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.dim, children: "run /pitwall:setup to see limits" }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
+  return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Box_default, { flexDirection: "column", width, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Section, { width, title: "LIMITS", children: limits === null ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.dim, children: "run /pitwall:setup to see limits" }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
       limits.contextPct !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(LimitRow, { label: "context", pct: limits.contextPct, color: limits.contextPct >= 80 ? colors.warning : colors.main }) : null,
       limits.fiveHour ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
         LimitRow,
@@ -34438,7 +34438,7 @@ function Stats({ state, limits, now }) {
         }
       ) : null
     ] }) }),
-    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Section, { title: "ADVISOR", titleColor: colors.advisor, right: `opus \xB7 ${calls.length} call${calls.length === 1 ? "" : "s"}`, children: calls.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.dim, children: "not called yet" }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Section, { width, title: "ADVISOR", titleColor: colors.advisor, right: `opus \xB7 ${calls.length} call${calls.length === 1 ? "" : "s"}`, children: calls.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.dim, children: "not called yet" }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
       /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { color: colors.dim, children: [
         fmtTokens(calls.reduce((n, c) => n + c.tokens, 0)),
         " tokens"
@@ -34462,8 +34462,8 @@ function Stats({ state, limits, now }) {
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.dim, children: "latest advice" }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.bright, children: clip2(last.source === "reviewer" && last.text ? last.text : "\u{1F512} native advice (encrypted)", inner) })
     ] }) }),
-    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Section, { title: "WHERE TOKENS WENT \xB7 this task", children: CATEGORIES.map((c) => /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { children: LABEL[c].padEnd(14) }),
+    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Section, { width, title: "WHERE TOKENS WENT \xB7 this task", children: CATEGORIES.map((c) => /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { children: width < 38 ? LABEL[c].slice(0, 8).padEnd(9) : LABEL[c].padEnd(14) }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: c === "coding" ? colors.done : colors.muted, children: bar2(pct[c]) }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { children: [
         " ",
@@ -34471,7 +34471,7 @@ function Stats({ state, limits, now }) {
         "%"
       ] })
     ] }, c)) }),
-    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Section, { title: "SKILLS \xB7 this session", right: "used by", children: state.skills.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.dim, children: "none yet" }) : state.skills.map((k) => {
+    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Section, { width, title: "SKILLS \xB7 this session", right: "used by", children: state.skills.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.dim, children: "none yet" }) : state.skills.map((k) => {
       const active = now - Date.parse(k.lastAt) < ACTIVE_SKILL_MS;
       return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Box_default, { justifyContent: "space-between", children: [
         /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { wrap: "truncate-end", color: active ? colors.bright : colors.dim, children: [
@@ -34851,8 +34851,7 @@ var SessionWatcher = class {
 
 // src/App.tsx
 var import_jsx_runtime5 = __toESM(require_jsx_runtime(), 1);
-var STATS_MIN_WIDTH = 160;
-var STATS_WIDTH = 40;
+var sidebarWidth = (w) => w >= 160 ? STATS_WIDTH : w >= 100 ? 34 : 0;
 var LOG_ROWS = 7;
 function useTermSize(width, height) {
   const { stdout } = use_stdout_default();
@@ -34900,8 +34899,9 @@ function App2({ cwd: cwd2, home, sessionId, width, height, pollMs = 500, tickMs 
       watcher.dir
     ] });
   }
-  const showStats = size.width >= STATS_MIN_WIDTH;
-  const graphWidth = showStats ? size.width - STATS_WIDTH - 1 : size.width;
+  const side = sidebarWidth(size.width);
+  const showStats = side > 0;
+  const graphWidth = showStats ? size.width - side - 1 : size.width;
   const graphHeight = Math.max(16, size.height - headerHeight(state, size.width) - logHeight(LOG_ROWS) - 1);
   const limits = readLimits(state.sessionId, home);
   return /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(Box_default, { flexDirection: "column", width: size.width, children: [
@@ -34911,7 +34911,7 @@ function App2({ cwd: cwd2, home, sessionId, width, height, pollMs = 500, tickMs 
         /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Graph, { state, width: graphWidth, height: graphHeight, tickMs }),
         /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Log, { entries: state.log, rows: LOG_ROWS, width: graphWidth })
       ] }),
-      showStats ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Box_default, { marginLeft: 1, children: /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Stats, { state, limits, now }) }) : null
+      showStats ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Box_default, { marginLeft: 1, children: /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Stats, { state, limits, now, width: side }) }) : null
     ] }),
     /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(Text, { backgroundColor: colors.pill, wrap: "truncate-end", children: [
       /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Text, { color: colors.bright, children: " $ pitwall watch" }),

@@ -33,7 +33,7 @@ The dashboard follows the newest session in the folder you start it for. To pin 
 
 Token counts include cached input, so they are bigger than the numbers in your plan's usage meter. They are for comparing agents with each other, not for billing.
 
-The stats column needs a terminal at least 160 columns wide; narrower terminals show the graph only.
+The sidebar (limits, advisor, tokens, skills) is full width from 160 columns, narrower from 100, and hidden below 100 so the graph stays readable.
 
 ## Develop
 

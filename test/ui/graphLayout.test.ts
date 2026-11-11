@@ -71,6 +71,11 @@ describe('layoutGraph', () => {
     expect(l.wires.find((w) => w.from === 'main' && w.to === 'advisor')?.cells.length).toBeGreaterThan(0);
   });
 
+  it('keeps the advisor panel wide enough to read in a medium graph', () => {
+    const l = layoutGraph([main()], 62, 30);
+    expect(l.boxes.find((b) => b.key === 'advisor')!.w).toBeGreaterThanOrEqual(20);
+  });
+
   it('does not crash on a tiny terminal', () => {
     expect(() => layoutGraph([main(), agent('a1')], 10, 4)).not.toThrow();
     expect(() => layoutGraph([main(), agent('a1')], 0, 0)).not.toThrow();

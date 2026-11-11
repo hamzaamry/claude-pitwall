@@ -86,6 +86,17 @@ describe('Stats: WHERE TOKENS WENT', () => {
   });
 });
 
+describe('Stats: width', () => {
+  it('fits a narrower width', () => {
+    const s = emptyState('s');
+    s.advisorCalls.push({ time: '2026-11-11T11:59:00.000Z', source: 'native', why: 'native advice', tokens: 26000 });
+    s.skills.push({ name: 'superpowers:systematic-debugging', by: 'main', firstAt: '2026-11-11T11:59:00.000Z', lastAt: '2026-11-11T11:59:00.000Z' });
+    const f = render(<Stats state={s} limits={limits} now={NOW} width={34} />).lastFrame()!;
+    for (const line of f.split('\n')) expect([...line].length).toBeLessThanOrEqual(34);
+    expect(f).toContain('LIMITS');
+  });
+});
+
 describe('Stats: look', () => {
   it('uses rounded boxes', () => expect(frame()).toContain('╭'));
 });

@@ -27,9 +27,25 @@ describe('App', () => {
     expect(show(120)).toContain('waiting for a Claude Code session in');
   });
 
-  it('at 120 columns hides the stats column', () => {
+  it('at 120 columns still shows the sidebar, narrower', () => {
     cpSync(FIXTURE, projectDir, { recursive: true });
     const f = show(120);
+    expect(f).toContain('LIMITS');
+    expect(f).toContain('WHERE TOKENS WENT');
+    expect(f).toContain('find callers');
+    for (const line of f.split('\n')) expect([...line].length).toBeLessThanOrEqual(120);
+  });
+
+  it('at 100 columns still shows the sidebar', () => {
+    cpSync(FIXTURE, projectDir, { recursive: true });
+    const f = show(100);
+    expect(f).toContain('LIMITS');
+    for (const line of f.split('\n')) expect([...line].length).toBeLessThanOrEqual(100);
+  });
+
+  it('below 100 columns hides the sidebar so the graph stays readable', () => {
+    cpSync(FIXTURE, projectDir, { recursive: true });
+    const f = show(90);
     expect(f).not.toContain('LIMITS');
     expect(f).toContain('find callers');
   });

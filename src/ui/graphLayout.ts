@@ -23,7 +23,8 @@ function pickCards(subs: AgentInfo[], fit: number): AgentInfo[] {
 }
 
 export function layoutGraph(agents: AgentInfo[], width: number, height: number): GraphLayout {
-  const advW = Math.min(ADVISOR_W, Math.max(8, Math.floor(width / 4)));
+  // wide enough to read its labels whenever the graph is a normal size
+  const advW = Math.min(ADVISOR_W, Math.max(width >= 60 ? 20 : 8, Math.floor(width / 4)));
   const advH = Math.max(MAIN_H, height);
   const areaX = advW + 2;
   const areaW = Math.max(1, width - areaX);
