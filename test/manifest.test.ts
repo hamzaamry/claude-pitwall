@@ -11,7 +11,7 @@ describe('plugin manifests', () => {
   it('plugin.json is valid and every command file exists', () => {
     const p = json('.claude-plugin/plugin.json');
     expect(p.name).toBe('pitwall');
-    expect(p.version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(p.version).toBeUndefined();
     expect(p.commands.length).toBeGreaterThan(0);
     for (const c of p.commands) expect(existsSync(join(root, c)), c).toBe(true);
   });
@@ -39,7 +39,7 @@ describe('team commands', () => {
   it('plugin.json lists all five commands', () => {
     const p = json('.claude-plugin/plugin.json');
     for (const n of ['setup', 'watch', 'on', 'off', 'ask-opus']) expect(p.commands, n).toContain(`./commands/${n}.md`);
-    expect(p.version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(p.version).toBeUndefined();
   });
   it('on: writes the per-session flag and loads the workflow skill', () => {
     const t = cmd('on');
@@ -77,13 +77,12 @@ describe('team commands', () => {
   });
 });
 
-describe('release 0.3.0', () => {
-  it('plugin.json, marketplace.json and package.json share one version', () => {
-    const v = json('package.json').version;
-    expect(json('.claude-plugin/plugin.json').version).toBe(v);
-    expect(json('.claude-plugin/marketplace.json').metadata.version).toBe(v);
+describe('release', () => {
+  it('no version numbers for now, and the marketplace serves this folder', () => {
+    expect(json('package.json').version).toBeUndefined();
+    expect(json('.claude-plugin/plugin.json').version).toBeUndefined();
+    expect(json('.claude-plugin/marketplace.json').metadata.version).toBeUndefined();
     expect(json('.claude-plugin/marketplace.json').plugins[0].source).toBe('./');
-    expect(v).toBe('0.3.0');
   });
   it('the team files exist', () => {
     for (const f of ['agents/scout.md', 'agents/runner.md', 'agents/reviewer.md', 'skills/workflow/SKILL.md', 'hooks/hooks.json',
