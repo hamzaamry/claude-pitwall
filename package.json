@@ -1,6 +1,6 @@
 {
   "name": "pitwall",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Live terminal dashboard of your Claude Code agents, models, effort and token use",
   "type": "module",
   "license": "MIT",

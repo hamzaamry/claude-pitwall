@@ -34,6 +34,43 @@ describe('plugin manifests', () => {
   });
 });
 
+describe('team commands', () => {
+  const cmd = (n: string) => readFileSync(join(root, 'commands', `${n}.md`), 'utf8');
+  it('plugin.json lists all five commands', () => {
+    const p = json('.claude-plugin/plugin.json');
+    for (const n of ['setup', 'watch', 'on', 'off', 'ask-opus']) expect(p.commands, n).toContain(`./commands/${n}.md`);
+    expect(p.version).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+  it('on: writes the per-session flag and loads the workflow skill', () => {
+    const t = cmd('on');
+    expect(t).toContain('${CLAUDE_SESSION_ID}');
+    expect(t).toContain('team');
+    expect(t).toContain('pitwall:workflow');
+  });
+  it('off: removes the flag', () => {
+    const t = cmd('off');
+    expect(t).toContain('${CLAUDE_SESSION_ID}');
+    expect(t).toMatch(/rm -f/);
+  });
+  it('ask-opus: sends the question to the reviewer with the ASK-OPUS marker and prints the answer word for word', () => {
+    const t = cmd('ask-opus');
+    expect(t).toContain('pitwall:reviewer');
+    expect(t).toContain('ASK-OPUS:');
+    expect(t).toContain('word for word');
+    expect(t).toContain('$ARGUMENTS');
+  });
+  it('setup: shows each change and asks before applying; the model is only suggested', () => {
+    const t = cmd('setup');
+    expect(t).toContain('advisorModel');
+    expect(t).toContain('Explore.md');
+    expect(t).toContain('statusline-tee.mjs');
+    expect(t).toMatch(/AskUserQuestion/);
+    expect(t).toMatch(/only after a yes/i);
+    expect(t).toMatch(/\/model sonnet/);
+    expect(t).toMatch(/never change the model/i);
+  });
+});
+
 describe('committed build', () => {
   it('dist/cli.js runs on its own, with no node_modules next to it', () => {
     const dir = mkdtempSync(join(tmpdir(), 'pitwall-bundle-'));

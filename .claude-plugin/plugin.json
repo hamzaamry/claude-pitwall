@@ -1,8 +1,20 @@
 {
   "name": "pitwall",
   "description": "Live terminal dashboard of your Claude Code agents, models, effort and token use",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "license": "MIT",
-  "keywords": ["dashboard", "monitoring", "agents", "tokens", "claude-code"],
-  "commands": ["./commands/setup.md", "./commands/watch.md"]
+  "keywords": [
+    "dashboard",
+    "monitoring",
+    "agents",
+    "tokens",
+    "claude-code"
+  ],
+  "commands": [
+    "./commands/setup.md",
+    "./commands/watch.md",
+    "./commands/on.md",
+    "./commands/off.md",
+    "./commands/ask-opus.md"
+  ]
 }
