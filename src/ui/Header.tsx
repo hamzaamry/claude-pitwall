@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import type { AgentInfo, SessionState } from '../model/state.js';
+import { statusAt, type AgentInfo, type SessionState } from '../model/state.js';
 import { fmtElapsed, fmtTokens } from './format.js';
 import { colorForRole, colors } from './theme.js';
 
@@ -13,6 +13,7 @@ export function Header({ state, teamOn, now, width }: {
 }) {
   const agents = Object.values(state.agents);
   const total = agents.reduce((n, a) => n + a.tokens, 0);
+  const advisorTokens = state.advisorCalls.reduce((n, c) => n + c.tokens, 0);
   const elapsed = state.startedAt ? fmtElapsed(now - Date.parse(state.startedAt)) : '0:00';
   const compact = width < 100;
   return (
@@ -22,11 +23,14 @@ export function Header({ state, teamOn, now, width }: {
         <Text>{state.currentTask || 'no task yet'}</Text>
         <Text color={colors.dim}> ({teamOn ? 'team on' : 'team off'})  </Text>
         <Text>tokens {fmtTokens(total)}</Text>
+        {advisorTokens > 0 ? <Text color={colors.advisor}> + advisor {fmtTokens(advisorTokens)}</Text> : null}
         <Text color={colors.dim}>  </Text>
         <Text>elapsed {elapsed}</Text>
       </Text>
       <Box flexWrap="wrap" columnGap={2}>
-        {agents.map((a) => (
+        {agents.map((a0) => {
+          const a = { ...a0, status: statusAt(a0, now) };
+          return (
           <Text key={a.key} wrap="truncate-end">
             <Text color={a.status === 'working' ? colorForRole(a.role) : colors.dim}>● </Text>
             <Text color={colorForRole(a.role)}>{a.role}</Text>
@@ -34,7 +38,8 @@ export function Header({ state, teamOn, now, width }: {
             {compact ? null : <Text color={STATUS_COLOR[a.status]}> {a.status}</Text>}
             <Text> {fmtTokens(a.tokens)}</Text>
           </Text>
-        ))}
+          );
+        })}
       </Box>
     </Box>
   );

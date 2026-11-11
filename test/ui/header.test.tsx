@@ -36,6 +36,22 @@ describe('Header', () => {
     expect(f).toContain('8.7k');
   });
 
+  it('shows advisor tokens next to the total, since they are Opus tokens', () => {
+    const s = sample();
+    s.advisorCalls.push({ time: 't', source: 'native', why: 'native advice', tokens: 26_300 });
+    const f = render(<Header state={s} teamOn={false} now={T0} width={150} />).lastFrame()!;
+    expect(f).toContain('tokens 68.7k');
+    expect(f).toContain('advisor 26.3k');
+  });
+
+  it('shows an agent quiet for 30 s as idle', () => {
+    const s = sample();
+    s.agents.main.lastActivity = '2026-11-11T10:00:00.000Z';
+    const f = render(<Header state={s} teamOn={false} now={T0 + 60_000} width={150} />).lastFrame()!;
+    expect(f).toContain('idle');
+    expect(f).not.toContain('working');
+  });
+
   it('does not crash with no agents', () => {
     const f = render(<Header state={emptyState('s')} teamOn={false} now={T0} width={50} />).lastFrame()!;
     expect(f).toContain('pitwall');

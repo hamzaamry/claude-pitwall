@@ -50,6 +50,13 @@ describe('Stats: ADVISOR', () => {
     expect(f).toContain('1 call');
     expect(f).toContain('🔒');
   });
+  it('shows advisor tokens in the summary and on each call', () => {
+    const s = emptyState('s');
+    s.advisorCalls.push({ time: '2026-11-11T11:59:00.000Z', source: 'native', why: 'native advice', tokens: 26_300 });
+    const f = frame(s);
+    expect(f).toContain('1 call · 26.3k tokens');
+    expect(f.split('\n').filter((l) => l.includes('native advice') && l.includes('26.3k'))).toHaveLength(1);
+  });
   it('shows the reviewer text as latest advice', () => {
     const s = emptyState('s');
     s.advisorCalls.push({ time: '2026-11-11T11:59:00.000Z', source: 'reviewer', why: 'final review', result: 'fix', tokens: 10, text: 'fix: two changes' });

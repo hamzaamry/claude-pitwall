@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { projectDirFor, latestSession, subagentFiles } from '../src/transcript/locate.js';
+import { projectDirFor, latestSession, listSessions, subagentFiles } from '../src/transcript/locate.js';
 
 let dir: string;
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'pitwall-loc-')); });
@@ -10,6 +10,25 @@ beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'pitwall-loc-')); });
 describe('locate', () => {
   it('projectDirFor maps cwd to the project slug dir', () => {
     expect(projectDirFor('/home/teacup/Hevier', '/h')).toBe('/h/.claude/projects/-home-teacup-Hevier');
+  });
+
+  it('projectDirFor replaces every non-alphanumeric character like Claude Code does', () => {
+    expect(projectDirFor('/home/a_b.c/my app', '/h')).toBe('/h/.claude/projects/-home-a-b-c-my-app');
+  });
+
+  it('projectDirFor finds a hashed long-name folder by its 200-char prefix', () => {
+    const long = '/' + 'a'.repeat(250);
+    const slug = long.replace(/[^a-zA-Z0-9]/g, '-');
+    const projects = join(dir, '.claude', 'projects');
+    mkdirSync(join(projects, slug.slice(0, 200) + '-abc123'), { recursive: true });
+    expect(projectDirFor(long, dir)).toBe(join(projects, slug.slice(0, 200) + '-abc123'));
+  });
+
+  it('listSessions lists jsonl files newest first', () => {
+    writeFileSync(join(dir, 'a.jsonl'), ''); writeFileSync(join(dir, 'b.jsonl'), '');
+    utimesSync(join(dir, 'a.jsonl'), 2000, 2000); utimesSync(join(dir, 'b.jsonl'), 1000, 1000);
+    expect(listSessions(dir).map((x) => x.id)).toEqual(['a', 'b']);
+    expect(listSessions(join(dir, 'missing'))).toEqual([]);
   });
 
   it('latestSession picks newest mtime', () => {

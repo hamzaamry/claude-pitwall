@@ -109,4 +109,77 @@ describe('SessionWatcher', () => {
     writeFileSync(join(projectDir, 's.jsonl'), 'garbage\n' + assistantLine('m1', 5) + '\n');
     expect(new SessionWatcher({ cwd: CWD, home }).poll()!.agents.main.tokens).toBe(5);
   });
+
+  it('does not flap between two sessions that write in turn', () => {
+    mkdirSync(projectDir, { recursive: true });
+    const now = Date.now() / 1000;
+    writeFileSync(join(projectDir, 'one.jsonl'), assistantLine('o1', 1) + '\n');
+    const w = new SessionWatcher({ cwd: CWD, home });
+    expect(w.poll()!.sessionId).toBe('one');
+    writeFileSync(join(projectDir, 'two.jsonl'), assistantLine('t1', 1) + '\n');
+    expect(w.poll()!.sessionId).toBe('two');
+    for (let i = 0; i < 6; i++) {
+      const f = i % 2 ? 'one' : 'two';
+      appendFileSync(join(projectDir, `${f}.jsonl`), assistantLine(`x${i}`, 1) + '\n');
+      utimesSync(join(projectDir, `${f}.jsonl`), now + i + 1, now + i + 1);
+      expect(w.poll()!.sessionId).toBe('two');
+    }
+  });
+
+  it('switches when the current session has been quiet for a long time', () => {
+    mkdirSync(projectDir, { recursive: true });
+    const old = Date.now() / 1000 - 120;
+    writeFileSync(join(projectDir, 'one.jsonl'), assistantLine('o1', 1) + '\n');
+    utimesSync(join(projectDir, 'one.jsonl'), old, old);
+    writeFileSync(join(projectDir, 'two.jsonl'), assistantLine('t1', 1) + '\n');
+    utimesSync(join(projectDir, 'two.jsonl'), old - 500, old - 500);
+    const w = new SessionWatcher({ cwd: CWD, home });
+    expect(w.poll()!.sessionId).toBe('one');
+    const fresh = Date.now() / 1000;
+    appendFileSync(join(projectDir, 'two.jsonl'), assistantLine('t2', 1) + '\n');
+    utimesSync(join(projectDir, 'two.jsonl'), fresh, fresh);
+    expect(w.poll()!.sessionId).toBe('two');
+  });
+
+  it('keeps each session state when switching back and forth (no re-read from zero)', () => {
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(join(projectDir, 'one.jsonl'), assistantLine('o1', 5) + '\n');
+    const w = new SessionWatcher({ cwd: CWD, home, sessionId: 'one' });
+    const first = w.poll()!;
+    expect(w.poll()).toBe(first);
+  });
+
+  it('reads message blocks spread over several lines of one message', () => {
+    mkdirSync(projectDir, { recursive: true });
+    const l = (content: unknown[]) => JSON.stringify({ type: 'assistant', timestamp: new Date().toISOString(), effort: 'medium',
+      message: { id: 'multi', model: 'claude-sonnet-5-5', content,
+        usage: { input_tokens: 1, output_tokens: 2, cache_read_input_tokens: 3, cache_creation_input_tokens: 4 } } });
+    writeFileSync(join(projectDir, 's.jsonl'), [
+      l([{ type: 'thinking' }]), l([{ type: 'text', text: 'hi' }]),
+      l([{ type: 'tool_use', id: 'toolu_a', name: 'Agent', input: { description: 'find callers', subagent_type: 'Explore' } }]),
+      l([{ type: 'tool_use', id: 'toolu_s', name: 'Skill', input: { skill: 'brainstorming' } }]),
+      l([{ type: 'tool_use', id: 'toolu_w', name: 'Write', input: {} }]),
+    ].join('\n') + '\n');
+    const s = new SessionWatcher({ cwd: CWD, home }).poll()!;
+    expect(s.agents.main.tokens).toBe(10);
+    expect(s.skills.map((k) => k.name)).toEqual(['brainstorming']);
+    expect(s.log.map((x) => x.text)).toContain('main → Explore: find callers');
+    expect(s.categories.coding).toBe(10);
+  });
+
+  it('does not replay old events as live dots', () => {
+    cpSync(FIXTURE, projectDir, { recursive: true });
+    const s = new SessionWatcher({ cwd: CWD, home }).poll()!;
+    expect(s.log.length).toBeGreaterThan(0);
+    expect(s.pendingFlows).toEqual([]);
+  });
+
+  it('keeps recent flows', () => {
+    mkdirSync(projectDir, { recursive: true });
+    const now = new Date().toISOString();
+    writeFileSync(join(projectDir, 's.jsonl'), JSON.stringify({ type: 'assistant', timestamp: now, message: { id: 'm', model: 'claude-sonnet-5-5',
+      content: [{ type: 'tool_use', id: 'toolu_a', name: 'Agent', input: { description: 'd', subagent_type: 'Explore' } }],
+      usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }) + '\n');
+    expect(new SessionWatcher({ cwd: CWD, home }).poll()!.pendingFlows).toHaveLength(1);
+  });
 });

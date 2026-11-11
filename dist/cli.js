@@ -2021,14 +2021,14 @@ var require_react_development = __commonJS({
               var thenableResult = result;
               var wasAwaited = false;
               var thenable = {
-                then: function(resolve, reject) {
+                then: function(resolve2, reject) {
                   wasAwaited = true;
                   thenableResult.then(function(returnValue2) {
                     popActScope(prevActScopeDepth);
                     if (actScopeDepth === 0) {
-                      recursivelyFlushAsyncActWork(returnValue2, resolve, reject);
+                      recursivelyFlushAsyncActWork(returnValue2, resolve2, reject);
                     } else {
-                      resolve(returnValue2);
+                      resolve2(returnValue2);
                     }
                   }, function(error2) {
                     popActScope(prevActScopeDepth);
@@ -2058,20 +2058,20 @@ var require_react_development = __commonJS({
                   ReactCurrentActQueue.current = null;
                 }
                 var _thenable = {
-                  then: function(resolve, reject) {
+                  then: function(resolve2, reject) {
                     if (ReactCurrentActQueue.current === null) {
                       ReactCurrentActQueue.current = [];
-                      recursivelyFlushAsyncActWork(returnValue, resolve, reject);
+                      recursivelyFlushAsyncActWork(returnValue, resolve2, reject);
                     } else {
-                      resolve(returnValue);
+                      resolve2(returnValue);
                     }
                   }
                 };
                 return _thenable;
               } else {
                 var _thenable2 = {
-                  then: function(resolve, reject) {
-                    resolve(returnValue);
+                  then: function(resolve2, reject) {
+                    resolve2(returnValue);
                   }
                 };
                 return _thenable2;
@@ -2087,7 +2087,7 @@ var require_react_development = __commonJS({
             actScopeDepth = prevActScopeDepth;
           }
         }
-        function recursivelyFlushAsyncActWork(returnValue, resolve, reject) {
+        function recursivelyFlushAsyncActWork(returnValue, resolve2, reject) {
           {
             var queue = ReactCurrentActQueue.current;
             if (queue !== null) {
@@ -2096,16 +2096,16 @@ var require_react_development = __commonJS({
                 enqueueTask(function() {
                   if (queue.length === 0) {
                     ReactCurrentActQueue.current = null;
-                    resolve(returnValue);
+                    resolve2(returnValue);
                   } else {
-                    recursivelyFlushAsyncActWork(returnValue, resolve, reject);
+                    recursivelyFlushAsyncActWork(returnValue, resolve2, reject);
                   }
                 });
               } catch (error2) {
                 reject(error2);
               }
             } else {
-              resolve(returnValue);
+              resolve2(returnValue);
             }
           }
         }
@@ -28229,6 +28229,7 @@ var require_jsx_runtime = __commonJS({
 
 // src/cli.ts
 var import_react24 = __toESM(require_react(), 1);
+import { resolve } from "node:path";
 
 // node_modules/ink/build/render.js
 import { Stream } from "node:stream";
@@ -33484,8 +33485,8 @@ var Ink = class {
     }
   }
   async waitUntilExit() {
-    this.exitPromise ||= new Promise((resolve, reject) => {
-      this.resolveExitPromise = resolve;
+    this.exitPromise ||= new Promise((resolve2, reject) => {
+      this.resolveExitPromise = resolve2;
       this.rejectExitPromise = reject;
     });
     return this.exitPromise;
@@ -33887,6 +33888,47 @@ function formatReset(resetsAt, now) {
 // src/ui/Graph.tsx
 var import_react22 = __toESM(require_react(), 1);
 
+// src/model/state.ts
+var IDLE_AFTER_MS = 3e4;
+function statusAt(a, nowMs) {
+  if (a.status === "working" && a.lastActivity && nowMs - Date.parse(a.lastActivity) > IDLE_AFTER_MS) return "idle";
+  return a.status;
+}
+function emptyState(sessionId) {
+  return {
+    sessionId,
+    currentTask: "",
+    agents: {},
+    seenMessageIds: /* @__PURE__ */ new Set(),
+    skills: [],
+    advisorCalls: [],
+    categories: { coding: 0, reading: 0, talking: 0, planning: 0, tests: 0 },
+    log: [],
+    pendingFlows: [],
+    hasEdited: false,
+    taskNo: 0,
+    msgInfo: /* @__PURE__ */ new Map(),
+    seenToolIds: /* @__PURE__ */ new Set(),
+    failedToolUseIds: /* @__PURE__ */ new Set()
+  };
+}
+
+// src/ui/format.ts
+function fmtTokens(n) {
+  if (n < 1e3) return String(n);
+  if (n < 1e6) return `${+(n / 1e3).toFixed(1)}k`;
+  return `${+(n / 1e6).toFixed(2)}M`;
+}
+function fmtElapsed(ms) {
+  const total = Math.max(0, Math.floor(ms / 1e3));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
+function fmtClock(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "--:--:--";
+  return d.toTimeString().slice(0, 8);
+}
+
 // src/ui/flowAnim.ts
 var MAX_DOTS = 6;
 var MAX_TRIES = 20;
@@ -34085,12 +34127,14 @@ function drawAdvisor(g, b, state) {
   const row = (n, text, c = color) => put(g, b.x + 2, b.y + n, clip(text, inner), c);
   row(1, "advisor \xB7 opus", color);
   row(2, configured ? `${state.advisorCalls.length} call${state.advisorCalls.length === 1 ? "" : "s"}` : "not configured", colors.dim);
+  if (configured) row(3, `${fmtTokens(state.advisorCalls.reduce((n, c) => n + c.tokens, 0))} tokens`, colors.dim);
   ["plan check", "stuck", "final review", "/ask-opus"].forEach((t, i) => row(4 + i, `\u25CB ${t}`));
   row(Math.max(10, b.h - 3), "on call", colors.dim);
   row(Math.max(11, b.h - 2), "never edits code", colors.dim);
 }
 function drawMain(g, b, state, frame) {
-  const a = state.agents.main;
+  const a0 = state.agents.main;
+  const a = a0 && { ...a0, status: statusAt(a0, Date.now()) };
   box(g, b, colors.main);
   const inner = b.w - 4;
   const label = ["main", a?.model, a?.effort].filter(Boolean).join(" \xB7 ");
@@ -34099,7 +34143,8 @@ function drawMain(g, b, state, frame) {
   const br = bar(a?.status ?? "idle", inner, frame);
   put(g, b.x + 2, b.y + 3, br.text, br.color);
 }
-function drawCard(g, b, a, frame) {
+function drawCard(g, b, a0, frame) {
+  const a = { ...a0, status: statusAt(a0, Date.now()) };
   const color = a.status === "failed" ? colors.failed : a.status === "done" ? colors.dim : colorForRole(a.role);
   box(g, b, color);
   const inner = b.w - 4;
@@ -34150,22 +34195,6 @@ function Graph({ state, width, height, tickMs = 120 }) {
   }) });
 }
 
-// src/ui/format.ts
-function fmtTokens(n) {
-  if (n < 1e3) return String(n);
-  if (n < 1e6) return `${+(n / 1e3).toFixed(1)}k`;
-  return `${+(n / 1e6).toFixed(2)}M`;
-}
-function fmtElapsed(ms) {
-  const total = Math.max(0, Math.floor(ms / 1e3));
-  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
-}
-function fmtClock(iso) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "--:--:--";
-  return d.toTimeString().slice(0, 8);
-}
-
 // src/ui/Header.tsx
 var import_jsx_runtime2 = __toESM(require_jsx_runtime(), 1);
 var STATUS_COLOR = {
@@ -34177,6 +34206,7 @@ var STATUS_COLOR = {
 function Header({ state, teamOn, now, width }) {
   const agents = Object.values(state.agents);
   const total = agents.reduce((n, a) => n + a.tokens, 0);
+  const advisorTokens = state.advisorCalls.reduce((n, c) => n + c.tokens, 0);
   const elapsed = state.startedAt ? fmtElapsed(now - Date.parse(state.startedAt)) : "0:00";
   const compact = width < 100;
   return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(Box_default, { flexDirection: "column", width, children: [
@@ -34193,28 +34223,35 @@ function Header({ state, teamOn, now, width }) {
         "tokens ",
         fmtTokens(total)
       ] }),
+      advisorTokens > 0 ? /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(Text, { color: colors.advisor, children: [
+        " + advisor ",
+        fmtTokens(advisorTokens)
+      ] }) : null,
       /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Text, { color: colors.dim, children: "  " }),
       /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(Text, { children: [
         "elapsed ",
         elapsed
       ] })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Box_default, { flexWrap: "wrap", columnGap: 2, children: agents.map((a) => /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(Text, { wrap: "truncate-end", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Text, { color: a.status === "working" ? colorForRole(a.role) : colors.dim, children: "\u25CF " }),
-      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Text, { color: colorForRole(a.role), children: a.role }),
-      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(Text, { color: colors.dim, children: [
-        " ",
-        [a.model, a.effort].filter(Boolean).join(" \xB7 ")
-      ] }),
-      compact ? null : /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(Text, { color: STATUS_COLOR[a.status], children: [
-        " ",
-        a.status
-      ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(Text, { children: [
-        " ",
-        fmtTokens(a.tokens)
-      ] })
-    ] }, a.key)) })
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Box_default, { flexWrap: "wrap", columnGap: 2, children: agents.map((a0) => {
+      const a = { ...a0, status: statusAt(a0, now) };
+      return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(Text, { wrap: "truncate-end", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Text, { color: a.status === "working" ? colorForRole(a.role) : colors.dim, children: "\u25CF " }),
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Text, { color: colorForRole(a.role), children: a.role }),
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(Text, { color: colors.dim, children: [
+          " ",
+          [a.model, a.effort].filter(Boolean).join(" \xB7 ")
+        ] }),
+        compact ? null : /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(Text, { color: STATUS_COLOR[a.status], children: [
+          " ",
+          a.status
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(Text, { children: [
+          " ",
+          fmtTokens(a.tokens)
+        ] })
+      ] }, a.key);
+    }) })
   ] });
 }
 
@@ -34310,13 +34347,18 @@ function Stats({ state, limits, now }) {
       /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { color: colors.advisor, children: [
         calls.length,
         " call",
-        calls.length === 1 ? "" : "s"
+        calls.length === 1 ? "" : "s",
+        " \xB7 ",
+        fmtTokens(calls.reduce((n, c) => n + c.tokens, 0)),
+        " tokens"
       ] }),
       calls.slice(-4).map((c, i) => /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { wrap: "truncate-end", children: [
         fmtClock(c.time),
         "  ",
         c.why,
-        c.result ? `  [${c.result}]` : ""
+        c.result ? `  [${c.result}]` : "",
+        "  ",
+        fmtTokens(c.tokens)
       ] }, i)),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.dim, children: "latest advice" }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.advisor, children: clip2(last.source === "reviewer" && last.text ? last.text : "\u{1F512} native advice (encrypted)", inner) })
@@ -34344,8 +34386,7 @@ function Stats({ state, limits, now }) {
 }
 
 // src/watcher.ts
-import { existsSync as existsSync3, readFileSync as readFileSync3 } from "node:fs";
-import { join as join3 } from "node:path";
+import { readFileSync as readFileSync3 } from "node:fs";
 
 // src/model/categories.ts
 var TEST_COMMAND = /\b(test|vitest|jest|pytest|tsc|lint|build|cargo check|go vet)\b/;
@@ -34383,14 +34424,15 @@ function registerSubagent(s, key, meta) {
   a.title = meta.description;
   if (meta.pickedEffortModel) a.model = modelAlias(meta.pickedEffortModel);
   if (meta.toolUseId) a.toolUseId = meta.toolUseId;
-  if (meta.finished && a.status !== "failed") a.status = "done";
+  if (meta.toolUseId && s.failedToolUseIds.has(meta.toolUseId)) a.status = "failed";
+  else if (meta.finished && a.status !== "failed") a.status = "done";
 }
 function onToolUse(s, key, time, b) {
   const who = agentFor(s, key).role;
   if (b.name === "Agent") {
     const description = String(b.input.description ?? "");
     const type = String(b.input.subagent_type ?? "general-purpose");
-    s.pendingFlows.push({ from: key, to: b.id, label: description, color: colorForRole(type) });
+    s.pendingFlows.push({ from: key, to: b.id, label: description, color: colorForRole(type), at: time });
     log(s, time, who, `${who} \u2192 ${type}: ${description}`);
   } else if (b.name === "Skill") {
     const name = String(b.input.skill ?? "");
@@ -34400,66 +34442,76 @@ function onToolUse(s, key, time, b) {
     else s.skills.push({ name, by: who, firstAt: time, lastAt: time });
   }
 }
+var EDIT_TOOLS = ["Edit", "Write", "NotebookEdit"];
+function slim(b) {
+  if (b.type !== "tool_use") return b;
+  return { ...b, input: b.name === "Bash" ? { command: String(b.input.command ?? "") } : {} };
+}
 function applyEvent(s, agentKey, e) {
   if (e.time) {
     s.startedAt ??= e.time;
     s.lastActivity = e.time;
   }
   const agent = agentFor(s, agentKey);
+  if (e.time) agent.lastActivity = e.time;
   if (e.kind === "userPrompt") {
     if (agentKey === "main") {
       s.currentTask = e.text.length > 60 ? e.text.slice(0, 60) + "\u2026" : e.text;
       s.hasEdited = false;
+      s.taskNo += 1;
+      s.categories = { coding: 0, reading: 0, talking: 0, planning: 0, tests: 0 };
     }
     return s;
   }
   if (e.kind === "toolResult") {
-    if (e.isError && agentKey !== "main") agent.status = "failed";
+    if (e.isError) {
+      s.failedToolUseIds.add(e.toolUseId);
+      const spawned = Object.values(s.agents).find((a) => a.toolUseId === e.toolUseId);
+      if (spawned) spawned.status = "failed";
+    }
     return s;
   }
-  if (s.seenMessageIds.has(e.messageId)) return s;
-  s.seenMessageIds.add(e.messageId);
-  if (e.model) agent.model = modelAlias(e.model);
-  if (e.effort) agent.effort = e.effort;
-  if (agent.status !== "failed" && agent.status !== "done") agent.status = "working";
-  agent.startedAt ??= e.time;
+  let info = s.msgInfo.get(e.messageId);
+  const first = !s.seenMessageIds.has(e.messageId);
   const total = e.usage.input + e.usage.output + e.usage.cacheRead + e.usage.cacheWrite;
-  agent.tokens += total;
-  s.categories[categorize(e.blocks, agentKey === "main" && s.hasEdited)] += total;
-  for (const b of e.blocks) {
-    if (b.type === "tool_use") {
-      onToolUse(s, agentKey, e.time, b);
-      if (agentKey === "main" && ["Edit", "Write", "NotebookEdit"].includes(b.name)) s.hasEdited = true;
+  if (first) {
+    s.seenMessageIds.add(e.messageId);
+    info = { tokens: total, blocks: [], category: "talking", task: s.taskNo };
+    s.msgInfo.set(e.messageId, info);
+    agent.tokens += total;
+    if (e.model) agent.model = modelAlias(e.model);
+    agent.startedAt ??= e.time;
+    if (e.advisorUsage) {
+      const u = e.advisorUsage;
+      const tokens = u.input + u.output + u.cacheRead + u.cacheWrite;
+      s.advisorCalls.push({ time: e.time, source: "native", why: "native advice", tokens });
+      s.pendingFlows.push({ from: agentKey, to: "advisor", label: "advice \u{1F512}", color: colors.advisor, at: e.time });
+      log(s, e.time, "advisor", "advice \u{1F512}");
     }
   }
-  if (e.advisorUsage) {
-    const u = e.advisorUsage;
-    s.advisorCalls.push({
-      time: e.time,
-      source: "native",
-      why: "native advice",
-      tokens: u.input + u.output + u.cacheRead + u.cacheWrite
-    });
-    s.pendingFlows.push({ from: agentKey, to: "advisor", label: "advice \u{1F512}", color: colors.advisor });
-    log(s, e.time, "advisor", "advice \u{1F512}");
+  if (e.effort) agent.effort = e.effort;
+  if (agent.status !== "failed" && agent.status !== "done") agent.status = "working";
+  for (const b of e.blocks) {
+    if (b.type === "tool_use" || b.type === "server_tool_use") {
+      if (s.seenToolIds.has(b.id)) continue;
+      s.seenToolIds.add(b.id);
+    }
+    info.blocks.push(slim(b));
+    if (b.type === "tool_use") {
+      onToolUse(s, agentKey, e.time, b);
+      if (agentKey === "main" && EDIT_TOOLS.includes(b.name)) s.hasEdited = true;
+    }
   }
+  const category = categorize(info.blocks, agentKey === "main" && s.hasEdited);
+  if (info.task === s.taskNo) {
+    if (first) s.categories[category] += total;
+    else if (category !== info.category) {
+      s.categories[info.category] -= info.tokens;
+      s.categories[category] += info.tokens;
+    }
+  }
+  info.category = category;
   return s;
-}
-
-// src/model/state.ts
-function emptyState(sessionId) {
-  return {
-    sessionId,
-    currentTask: "",
-    agents: {},
-    seenMessageIds: /* @__PURE__ */ new Set(),
-    skills: [],
-    advisorCalls: [],
-    categories: { coding: 0, reading: 0, talking: 0, planning: 0, tests: 0 },
-    log: [],
-    pendingFlows: [],
-    hasEdited: false
-  };
 }
 
 // src/transcript/locate.ts
@@ -34467,18 +34519,29 @@ import { existsSync as existsSync2, readdirSync, statSync } from "node:fs";
 import { homedir as homedir2 } from "node:os";
 import { join as join2 } from "node:path";
 function projectDirFor(cwd2, home = homedir2()) {
-  return join2(home, ".claude", "projects", cwd2.replace(/\//g, "-"));
+  const base = join2(home, ".claude", "projects");
+  const slug = cwd2.replace(/[^a-zA-Z0-9]/g, "-");
+  if (slug.length <= 200) return join2(base, slug);
+  const prefix = slug.slice(0, 200);
+  try {
+    const hit = readdirSync(base).find((n) => n.startsWith(prefix));
+    if (hit) return join2(base, hit);
+  } catch {
+  }
+  return join2(base, prefix);
 }
-function latestSession(projectDir) {
-  if (!existsSync2(projectDir)) return null;
-  let best = null;
+function listSessions(projectDir) {
+  if (!existsSync2(projectDir)) return [];
+  const out = [];
   for (const name of readdirSync(projectDir)) {
     if (!name.endsWith(".jsonl")) continue;
     const file = join2(projectDir, name);
-    const mtime = statSync(file).mtimeMs;
-    if (!best || mtime > best.mtime) best = { id: name.slice(0, -".jsonl".length), file, mtime };
+    try {
+      out.push({ id: name.slice(0, -".jsonl".length), file, mtime: statSync(file).mtimeMs });
+    } catch {
+    }
   }
-  return best && { id: best.id, file: best.file };
+  return out.sort((a, b) => b.mtime - a.mtime);
 }
 function subagentFiles(projectDir, sessionId) {
   const dir = join2(projectDir, sessionId, "subagents");
@@ -34525,6 +34588,8 @@ function toBlock(b) {
       return null;
   }
 }
+var NOT_A_PROMPT = /^<(command-|local-command-|system-reminder|task-notification)/;
+var isPrompt = (t) => !NOT_A_PROMPT.test(t.trimStart());
 function parseLine(raw) {
   let d;
   try {
@@ -34551,13 +34616,16 @@ function parseLine(raw) {
     };
   }
   if (d.type === "user" && m) {
-    if (typeof m.content === "string") return { kind: "userPrompt", time, text: m.content };
+    if (d.isMeta) return null;
+    if (typeof m.content === "string") return isPrompt(m.content) ? { kind: "userPrompt", time, text: m.content } : null;
     if (Array.isArray(m.content)) {
       const r = m.content.find((c) => c?.type === "tool_result");
       if (r) {
-        const text = typeof r.content === "string" ? r.content : Array.isArray(r.content) ? r.content.filter((c) => c?.type === "text").map((c) => c.text).join("\n") : "";
-        return { kind: "toolResult", time, toolUseId: r.tool_use_id, isError: r.is_error === true, text };
+        const text2 = typeof r.content === "string" ? r.content : Array.isArray(r.content) ? r.content.filter((c) => c?.type === "text").map((c) => c.text).join("\n") : "";
+        return { kind: "toolResult", time, toolUseId: r.tool_use_id, isError: r.is_error === true, text: text2 };
       }
+      const text = m.content.filter((c) => c?.type === "text" && typeof c.text === "string").map((c) => c.text).join("\n");
+      if (text && isPrompt(text)) return { kind: "userPrompt", time, text };
     }
   }
   return null;
@@ -34605,13 +34673,14 @@ var FileTail = class {
 };
 
 // src/watcher.ts
+var QUIET_MS = 3e4;
+var LIVE_FLOW_MS = 1e4;
 var SessionWatcher = class {
   projectDir;
   pinned;
-  sessionId;
-  state;
-  mainTail;
-  subs = /* @__PURE__ */ new Map();
+  current;
+  known = /* @__PURE__ */ new Set();
+  ctxs = /* @__PURE__ */ new Map();
   constructor(opts) {
     this.projectDir = projectDirFor(opts.cwd, opts.home);
     this.pinned = opts.sessionId;
@@ -34619,25 +34688,42 @@ var SessionWatcher = class {
   get dir() {
     return this.projectDir;
   }
+  choose(list) {
+    if (this.pinned) return list.find((x) => x.id === this.pinned);
+    const cur = list.find((x) => x.id === this.current);
+    const newest = list[0];
+    if (!cur) return newest;
+    const newcomer = list.find((x) => !this.known.has(x.id));
+    if (newcomer) return newcomer;
+    if (newest.id !== cur.id && Date.now() - cur.mtime > QUIET_MS) return newest;
+    return cur;
+  }
   poll() {
-    const target = this.pinned ? existsSync3(join3(this.projectDir, `${this.pinned}.jsonl`)) ? { id: this.pinned, file: join3(this.projectDir, `${this.pinned}.jsonl`) } : null : latestSession(this.projectDir);
-    if (!target) return this.state ?? null;
-    if (target.id !== this.sessionId) {
-      this.sessionId = target.id;
-      this.state = emptyState(target.id);
-      this.mainTail = new FileTail(target.file);
-      this.subs.clear();
+    const list = listSessions(this.projectDir);
+    const target = this.choose(list);
+    for (const x of list) this.known.add(x.id);
+    if (!target) return this.current ? this.ctxs.get(this.current).state : null;
+    this.current = target.id;
+    let ctx = this.ctxs.get(target.id);
+    if (!ctx) {
+      ctx = { state: emptyState(target.id), mainTail: new FileTail(target.file), subs: /* @__PURE__ */ new Map() };
+      this.ctxs.set(target.id, ctx);
     }
-    const state = this.state;
-    for (const line of this.mainTail.readNew()) this.apply(state, "main", line);
+    const state = ctx.state;
+    for (const line of ctx.mainTail.readNew()) this.apply(state, "main", line);
     for (const f of subagentFiles(this.projectDir, target.id)) {
-      let sub = this.subs.get(f.key);
+      let sub = ctx.subs.get(f.key);
       if (!sub) {
         sub = { tail: new FileTail(f.file), finished: false };
-        this.subs.set(f.key, sub);
+        ctx.subs.set(f.key, sub);
       }
       if (!sub.finished) sub.finished = this.readMeta(state, f.key, f.metaFile);
       for (const line of sub.tail.readNew()) this.apply(state, f.key, line);
+    }
+    const cutoff = Date.now() - LIVE_FLOW_MS;
+    for (let i = state.pendingFlows.length - 1; i >= 0; i--) {
+      const at = state.pendingFlows[i].at;
+      if (at && Date.parse(at) < cutoff) state.pendingFlows.splice(i, 1);
     }
     return state;
   }
@@ -34738,7 +34824,7 @@ if (command !== "watch") {
   console.log("usage: pitwall watch [--cwd <dir>] [--session <id>]   (press q to quit)");
   process.exit(command === void 0 || command === "--help" ? 0 : 1);
 }
-render_default(import_react24.default.createElement(App2, { cwd: arg("--cwd") ?? process.cwd(), sessionId: arg("--session") }));
+render_default(import_react24.default.createElement(App2, { cwd: resolve(arg("--cwd") ?? process.cwd()), sessionId: arg("--session") }));
 /*! Bundled license information:
 
 react/cjs/react.production.min.js:

@@ -36,6 +36,7 @@ describe('Graph', () => {
     const f = render(<Graph state={s} width={100} height={22} tickMs={0} />).lastFrame()!;
     expect(f).not.toContain('not configured');
     expect(f).toContain('1 call');
+    expect(f).toContain('10 tokens');
   });
 
   it('draws status markers for done and failed cards', () => {

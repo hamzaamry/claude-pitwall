@@ -1,4 +1,5 @@
 import React from 'react';
+import { resolve } from 'node:path';
 import { render } from 'ink';
 import { App } from './App.js';
 
@@ -13,4 +14,4 @@ if (command !== 'watch') {
   process.exit(command === undefined || command === '--help' ? 0 : 1);
 }
 
-render(React.createElement(App, { cwd: arg('--cwd') ?? process.cwd(), sessionId: arg('--session') }));
+render(React.createElement(App, { cwd: resolve(arg('--cwd') ?? process.cwd()), sessionId: arg('--session') }));

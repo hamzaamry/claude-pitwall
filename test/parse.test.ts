@@ -44,4 +44,20 @@ describe('parseLine', () => {
   it('returns null on invalid JSON', () => {
     expect(parseLine('{nope')).toBeNull();
   });
+
+  const user = (content: unknown, extra: object = {}) =>
+    JSON.stringify({ type: 'user', timestamp: 't', message: { role: 'user', content }, ...extra });
+  it('skips meta and command wrapper lines (they are not the task)', () => {
+    expect(parseLine(user('<command-name>/model</command-name>'))).toBeNull();
+    expect(parseLine(user('<local-command-stdout>ok</local-command-stdout>'))).toBeNull();
+    expect(parseLine(user('<local-command-caveat>x</local-command-caveat>'))).toBeNull();
+    expect(parseLine(user('real text', { isMeta: true }))).toBeNull();
+  });
+  it('takes the text of a prompt stored as an array (e.g. with an image)', () => {
+    expect(parseLine(user([{ type: 'image', source: {} }, { type: 'text', text: 'fix this' }])))
+      .toMatchObject({ kind: 'userPrompt', text: 'fix this' });
+  });
+  it('keeps a normal prompt that starts with a bracket', () => {
+    expect(parseLine(user('<div> is broken'))).toMatchObject({ kind: 'userPrompt' });
+  });
 });

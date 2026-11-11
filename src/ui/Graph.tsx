@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text } from 'ink';
-import type { AgentInfo, SessionState } from '../model/state.js';
+import { statusAt, type AgentInfo, type SessionState } from '../model/state.js';
+import { fmtTokens } from './format.js';
 import { stepFlows, type ActiveFlow } from './flowAnim.js';
 import { layoutGraph, type GraphLayout } from './graphLayout.js';
 import { colorForRole, colors } from './theme.js';
@@ -107,13 +108,15 @@ function drawAdvisor(g: Grid, b: { x: number; y: number; w: number; h: number },
   const row = (n: number, text: string, c = color) => put(g, b.x + 2, b.y + n, clip(text, inner), c);
   row(1, 'advisor · opus', color);
   row(2, configured ? `${state.advisorCalls.length} call${state.advisorCalls.length === 1 ? '' : 's'}` : 'not configured', colors.dim);
+  if (configured) row(3, `${fmtTokens(state.advisorCalls.reduce((n, c) => n + c.tokens, 0))} tokens`, colors.dim);
   ['plan check', 'stuck', 'final review', '/ask-opus'].forEach((t, i) => row(4 + i, `○ ${t}`));
   row(Math.max(10, b.h - 3), 'on call', colors.dim);
   row(Math.max(11, b.h - 2), 'never edits code', colors.dim);
 }
 
 function drawMain(g: Grid, b: { x: number; y: number; w: number; h: number }, state: SessionState, frame: number): void {
-  const a = state.agents.main;
+  const a0 = state.agents.main;
+  const a = a0 && { ...a0, status: statusAt(a0, Date.now()) };
   box(g, b, colors.main);
   const inner = b.w - 4;
   const label = ['main', a?.model, a?.effort].filter(Boolean).join(' · ');
@@ -123,7 +126,8 @@ function drawMain(g: Grid, b: { x: number; y: number; w: number; h: number }, st
   put(g, b.x + 2, b.y + 3, br.text, br.color);
 }
 
-function drawCard(g: Grid, b: { x: number; y: number; w: number; h: number }, a: AgentInfo, frame: number): void {
+function drawCard(g: Grid, b: { x: number; y: number; w: number; h: number }, a0: AgentInfo, frame: number): void {
+  const a = { ...a0, status: statusAt(a0, Date.now()) };
   const color = a.status === 'failed' ? colors.failed : a.status === 'done' ? colors.dim : colorForRole(a.role);
   box(g, b, color);
   const inner = b.w - 4;

@@ -31,6 +31,10 @@ function toBlock(b: Raw): Block | null {
   }
 }
 
+// Slash commands and system notes are written as user lines but are not something the user asked for.
+const NOT_A_PROMPT = /^<(command-|local-command-|system-reminder|task-notification)/;
+const isPrompt = (t: string) => !NOT_A_PROMPT.test(t.trimStart());
+
 export function parseLine(raw: string): TranscriptEvent | null {
   let d: Raw;
   try { d = JSON.parse(raw); } catch { return null; }
@@ -52,7 +56,8 @@ export function parseLine(raw: string): TranscriptEvent | null {
   }
 
   if (d.type === 'user' && m) {
-    if (typeof m.content === 'string') return { kind: 'userPrompt', time, text: m.content };
+    if (d.isMeta) return null;
+    if (typeof m.content === 'string') return isPrompt(m.content) ? { kind: 'userPrompt', time, text: m.content } : null;
     if (Array.isArray(m.content)) {
       const r = m.content.find((c: Raw) => c?.type === 'tool_result');
       if (r) {
@@ -61,6 +66,9 @@ export function parseLine(raw: string): TranscriptEvent | null {
             ? r.content.filter((c: Raw) => c?.type === 'text').map((c: Raw) => c.text).join('\n') : '';
         return { kind: 'toolResult', time, toolUseId: r.tool_use_id, isError: r.is_error === true, text };
       }
+      // a prompt stored as blocks, for example text plus an image
+      const text = m.content.filter((c: Raw) => c?.type === 'text' && typeof c.text === 'string').map((c: Raw) => c.text).join('\n');
+      if (text && isPrompt(text)) return { kind: 'userPrompt', time, text };
     }
   }
   return null;
