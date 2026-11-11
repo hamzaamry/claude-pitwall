@@ -94,11 +94,17 @@ describe('applyEvent', () => {
 });
 
 describe('registerSubagent', () => {
-  it('sets role/model/title', () => {
+  it('sets role/title/status', () => {
     const s = emptyState('s');
-    registerSubagent(s, 'a1', { agentType: 'Explore', description: 'find callers',
-      pickedEffortModel: 'claude-opus-5-5', finished: true });
-    expect(s.agents.a1).toMatchObject({ role: 'Explore', model: 'opus', title: 'find callers', status: 'done' });
+    registerSubagent(s, 'a1', { agentType: 'Explore', description: 'find callers', finished: true });
+    expect(s.agents.a1).toMatchObject({ role: 'Explore', title: 'find callers', status: 'done' });
+  });
+
+  it("keeps the model from the agent's own transcript (meta pickedEffortModel is the parent's model)", () => {
+    const s = emptyState('s');
+    applyEvent(s, 'a1', asst({ model: 'claude-haiku-5-5' }));
+    registerSubagent(s, 'a1', { agentType: 'pitwall:scout', description: 'find callers', finished: true });
+    expect(s.agents.a1.model).toBe('haiku');
   });
 });
 

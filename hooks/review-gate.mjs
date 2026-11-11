@@ -31,6 +31,7 @@ function checkpoint(input) {
 
 function gate(input) {
   if (!input.session_id || input.stop_hook_active === true || !teamOn(input) || !mainEditedThisTurn(input.session_id)) return;
+  if (readState(input.session_id).finalReviewed) return; // one final review per task (main-guard tracks it)
   const cur = snapshot(input.cwd || process.cwd());
   if (!cur) return;
   const base = readState(input.session_id).base ?? {};

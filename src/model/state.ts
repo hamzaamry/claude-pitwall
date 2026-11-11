@@ -25,7 +25,7 @@ export type SessionState = {
   nudges: Record<string, string>;         // hook nudges by kind -> time
   advisorModel?: string;                  // set on every assistant line once an advisor is configured
   triggers: Triggers;                     // advisor trigger states of the current task
-  spawns: Map<string, { from: string; type: string; askOpus: boolean }>;  // Agent tool_use id -> who asked for what
+  spawns: Map<string, { from: string; type: string; askOpus: boolean; planCheck?: boolean }>;  // Agent tool_use id -> who asked for what
   taskNo: number;                         // counts main user prompts; categories belong to the current one
   // bookkeeping for messages written on several lines (one line per content block)
   msgInfo: Map<string, { tokens: number; blocks: Block[]; category: Category; task: number }>;

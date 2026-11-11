@@ -10,12 +10,9 @@ describe('workflow skill', () => {
     expect(skill.meta.name).toBe('workflow');
     expect(skill.meta.description.length).toBeGreaterThan(20);
   });
-  it('separates small tasks (alone) from big ones (the team, in order)', () => {
-    const b = skill.body;
-    expect(b).toMatch(/small/i);
-    expect(b).toMatch(/big/i);
-    const big = b.slice(b.indexOf('**Big task**')).toLowerCase();
-    const order = ['pitwall:scout', 'advisor', 'edit', 'pitwall:runner', 'pitwall:reviewer'].map((w) => big.indexOf(w));
+  it('lists the steps in order: scouts, plan check, code, runner, final review', () => {
+    const big = skill.body.toLowerCase();
+    const order = ['pitwall:scout', 'plan-check:', 'edit and write', 'pitwall:runner', 'on the diff'].map((w) => big.indexOf(w));
     expect(order.every((i) => i >= 0), JSON.stringify(order)).toBe(true);
     expect([...order].sort((x, y) => x - y)).toEqual(order);
   });

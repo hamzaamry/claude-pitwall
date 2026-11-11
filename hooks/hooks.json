@@ -8,6 +8,14 @@
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/event-log.mjs\""
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/main-guard.mjs\" start"
+          }
+        ]
       }
     ],
     "SubagentStop": [
@@ -24,6 +32,14 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/review-gate.mjs\" mark"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/main-guard.mjs\" verdict"
           }
         ]
       }
@@ -43,6 +59,14 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/read-cap.mjs\""
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/main-guard.mjs\" check"
           }
         ]
       }

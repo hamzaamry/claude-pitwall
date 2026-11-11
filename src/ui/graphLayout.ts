@@ -1,8 +1,10 @@
 import type { AgentInfo } from '../model/state.js';
+import { isReviewer } from '../role.js';
 
 export type GraphLayout = {
-  boxes: { key: string; x: number; y: number; w: number; h: number }[];
-  wires: { from: string; to: string; cells: [number, number][]; toolUseId?: string }[];
+  boxes: { key: string; x: number; y: number; w: number; h: number; runs?: number }[];
+  // aliases: the other runs merged into this card (their keys and tool_use ids), so their dots use this wire
+  wires: { from: string; to: string; cells: [number, number][]; toolUseId?: string; aliases?: string[] }[];
 };
 
 export const MAIN_H = 5;
@@ -44,7 +46,20 @@ export function layoutGraph(agents: AgentInfo[], width: number, height: number):
   for (let x = advW; x < mainX; x++) advCells.push([x, midY]);
   if (advCells.length) wires.push({ from: 'main', to: 'advisor', cells: advCells });
 
-  const subs = agents.filter((a) => a.key !== 'main');
+  // the reviewer is drawn as the advisor panel, not as a card of its own
+  // The same job run again (same role, same task) reuses its card: the live run, else the latest one.
+  const groups = new Map<string, AgentInfo[]>();
+  for (const a of agents) {
+    if (a.key === 'main' || isReviewer(a.role)) continue;
+    const id = `${a.role}|${a.title}`;
+    groups.set(id, [...(groups.get(id) ?? []), a]);
+  }
+  const runsOf = new Map<string, AgentInfo[]>();
+  const subs = [...groups.values()].map((runs) => {
+    const shown = [...runs].reverse().find((r) => !isFinished(r)) ?? runs[runs.length - 1];
+    runsOf.set(shown.key, runs);
+    return shown;
+  });
   const cardW = Math.min(CARD_W, areaW);
   const fit = Math.max(1, Math.floor((areaW + 1) / (cardW + 1)));
   const shown = pickCards(subs, fit);
@@ -55,14 +70,16 @@ export function layoutGraph(agents: AgentInfo[], width: number, height: number):
 
   shown.forEach((a, i) => {
     const x = rowX + i * (cardW + 1);
-    boxes.push({ key: a.key, x, y: cardY, w: cardW, h: CARD_H });
+    const runs = runsOf.get(a.key) ?? [a];
+    boxes.push({ key: a.key, x, y: cardY, w: cardW, h: CARD_H, ...(runs.length > 1 ? { runs: runs.length } : {}) });
+    const aliases = runs.filter((r) => r !== a).flatMap((r) => [r.key, ...(r.toolUseId ? [r.toolUseId] : [])]);
     const cx = x + Math.floor(cardW / 2);
     const cells: [number, number][] = [];
     for (let y = mainBottom; y <= busY; y++) cells.push([mainCx, y]);
     const step = cx >= mainCx ? 1 : -1;
     for (let px = mainCx + step; px !== cx + step && cx !== mainCx; px += step) cells.push([px, busY]);
     cells.push([cx, cardY - 1]);
-    wires.push({ from: 'main', to: a.key, cells, ...(a.toolUseId ? { toolUseId: a.toolUseId } : {}) });
+    wires.push({ from: 'main', to: a.key, cells, ...(a.toolUseId ? { toolUseId: a.toolUseId } : {}), ...(aliases.length ? { aliases } : {}) });
   });
 
   return { boxes, wires };

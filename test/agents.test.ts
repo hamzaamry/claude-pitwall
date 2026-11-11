@@ -32,11 +32,11 @@ describe('agent files', () => {
     expect(body).toMatch(/only the failing/i);
   });
 
-  it('reviewer: opus, high effort, no Edit or Write, 20 turns', () => {
+  it('reviewer: opus, medium effort, no Edit or Write, 20 turns', () => {
     const { meta } = agent('reviewer');
-    expect(meta).toMatchObject({ model: 'opus', effort: 'high', maxTurns: '20' });
+    expect(meta).toMatchObject({ model: 'opus', effort: 'medium', maxTurns: '20' });
     const tools = toolList(meta);
-    expect(tools).toEqual(['Read', 'Grep', 'Glob', 'Bash', 'Agent']);
+    expect(tools).toEqual(['Read', 'Bash', 'Agent']);
     expect(tools).not.toContain('Edit');
     expect(tools).not.toContain('Write');
   });

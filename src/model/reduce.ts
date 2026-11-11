@@ -1,6 +1,6 @@
 import type { Block, TranscriptEvent } from '../transcript/types.js';
 import { oneLine } from '../oneLine.js';
-import { shortRole } from '../role.js';
+import { isReviewer, shortRole } from '../role.js';
 import { colorForRole, colors } from '../ui/theme.js';
 import { categorize, TEST_COMMAND } from './categories.js';
 import { freshTriggers, type AgentInfo, type Category, type SessionState } from './state.js';
@@ -41,12 +41,12 @@ export function settle(s: SessionState, a: AgentInfo, status: 'done' | 'failed',
 
 export function registerSubagent(
   s: SessionState, key: string,
-  meta: { agentType: string; description: string; pickedEffortModel?: string; finished?: boolean; toolUseId?: string },
+  meta: { agentType: string; description: string; finished?: boolean; toolUseId?: string },
 ): void {
+  // the model comes from the agent's own transcript: meta's pickedEffortModel is the parent's model
   const a = agentFor(s, key);
   a.role = shortRole(meta.agentType);
   a.title = oneLine(meta.description);
-  if (meta.pickedEffortModel) a.model = modelAlias(meta.pickedEffortModel);
   if (meta.toolUseId) a.toolUseId = meta.toolUseId;
   const time = s.lastActivity ?? '';
   if (meta.toolUseId && s.failedToolUseIds.has(meta.toolUseId)) settle(s, a, 'failed', time);
@@ -59,9 +59,18 @@ function onToolUse(s: SessionState, key: string, time: string, b: Extract<Block,
     const description = oneLine(String(b.input.description ?? ''));
     const type = String(b.input.subagent_type ?? 'general-purpose');
     const shown = shortRole(type);
-    s.pendingFlows.push({ from: key, to: b.id, label: description, color: colorForRole(type), at: time });
-    s.spawns.set(b.id, { from: key, type, askOpus: String(b.input.prompt ?? '').trimStart().startsWith('ASK-OPUS:') });
+    s.pendingFlows.push({ from: key, to: isReviewer(type) ? 'advisor' : b.id, label: description, color: colorForRole(type), at: time });
+    const prompt = String(b.input.prompt ?? '').trimStart();
+    s.spawns.set(b.id, { from: key, type, askOpus: prompt.startsWith('ASK-OPUS:'), planCheck: prompt.startsWith('PLAN-CHECK:') });
     log(s, time, who, `${who} → ${shown}: ${description}`);
+  } else if (b.name === 'SendMessage' && isReviewer(s.agents[String(b.input.to ?? '')]?.role ?? '')) {
+    // the session's reviewer, continued: same advisor wire, counted by what was asked
+    const message = String(b.input.message ?? '').trimStart();
+    const why = message.startsWith('ASK-OPUS:') ? 'ask-opus' : message.startsWith('PLAN-CHECK:') ? 'plan check' : 'final review';
+    s.pendingFlows.push({ from: key, to: 'advisor', label: why, color: colorForRole('reviewer'), at: time });
+    s.advisorCalls.push({ time, source: 'reviewer', why, tokens: 0, taskNo: s.taskNo });
+    if (why === 'ask-opus') s.triggers.askOpus = 'done'; else if (why === 'plan check') s.triggers.planCheck = 'done'; else s.triggers.finalReview = 'done';
+    log(s, time, who, `${who} → reviewer (continued): ${why}`);
   } else if (b.name === 'Skill') {
     const name = String(b.input.skill ?? '');
     if (!name) return;
@@ -80,8 +89,7 @@ function onToolUse(s: SessionState, key: string, time: string, b: Extract<Block,
   }
 }
 
-const VERDICT = /^(approved|needs info|fix)\b/i;
-const isReviewer = (type: string) => /(^|:)reviewer$/.test(type);
+const VERDICT = /^(plan approved|approved|needs info|fix)\b/i;
 const firstLine = (t: string) => t.split('\n').map((l) => l.trim()).find(Boolean) ?? '';
 
 /** An Agent tool call came back: draw the answer travelling home, and count a reviewer answer as advice. */
@@ -89,14 +97,16 @@ function onAgentResult(s: SessionState, e: Extract<TranscriptEvent, { kind: 'too
   const spawn = s.spawns.get(e.toolUseId);
   if (!spawn) return;
   const card = Object.values(s.agents).find((a) => a.toolUseId === e.toolUseId);
-  s.pendingFlows.push({ from: card?.key ?? e.toolUseId, to: spawn.from, back: true, at: e.time,
+  s.pendingFlows.push({ from: isReviewer(spawn.type) ? 'advisor' : card?.key ?? e.toolUseId, to: spawn.from, back: true, at: e.time,
     label: oneLine(firstLine(e.text)).slice(0, 24), color: colorForRole(spawn.type) });
   if (!isReviewer(spawn.type) || e.isError) return;
   const verdict = firstLine(e.text).match(VERDICT)?.[1].toLowerCase();
-  const askOpus = spawn.askOpus;
-  s.advisorCalls.push({ time: e.time, source: 'reviewer', why: askOpus ? 'ask-opus' : 'final review',
+  const { askOpus, planCheck } = spawn;
+  s.advisorCalls.push({ time: e.time, source: 'reviewer', why: askOpus ? 'ask-opus' : planCheck ? 'plan check' : 'final review',
     result: askOpus ? undefined : verdict, text: oneLine(e.text), tokens: card?.tokens ?? 0, taskNo: s.taskNo, toolUseId: e.toolUseId });
-  if (askOpus) s.triggers.askOpus = 'done'; else s.triggers.finalReview = 'done';
+  if (askOpus) s.triggers.askOpus = 'done';
+  else if (planCheck) s.triggers.planCheck = 'done';
+  else s.triggers.finalReview = 'done';
   log(s, e.time, 'reviewer', askOpus ? 'answered' : `verdict: ${verdict ?? 'unclear'}`);
 }
 
@@ -105,7 +115,9 @@ const EDIT_TOOLS = ['Edit', 'Write', 'NotebookEdit'];
 /** Keep only what categorize needs, so a Write with a whole file in its input is not held in memory. */
 function slim(b: Block): Block {
   if (b.type !== 'tool_use') return b;
-  return { ...b, input: b.name === 'Bash' ? { command: String(b.input.command ?? '') } : {} };
+  if (b.name === 'Bash') return { ...b, input: { command: String(b.input.command ?? '') } };
+  if (b.name === 'Agent') return { ...b, input: { subagent_type: String(b.input.subagent_type ?? '') } };
+  return { ...b, input: {} };
 }
 
 export function applyEvent(s: SessionState, agentKey: string, e: TranscriptEvent): SessionState {

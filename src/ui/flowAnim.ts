@@ -22,9 +22,10 @@ export function stepFlows(active: ActiveFlow[], pending: Flow[], layout: GraphLa
     const flow = pending.shift()!;
     // A forward flow goes from its sender along the wire to `to` (a card key or a tool_use id);
     // a return flow (back) is named by the card it comes from and walks the same wire home.
+    const reaches = (w: GraphLayout['wires'][number], id: string) => w.to === id || w.toolUseId === id || !!w.aliases?.includes(id);
     const wireIndex = layout.wires.findIndex((w) => flow.back
-      ? w.from === flow.to && (w.to === flow.from || w.toolUseId === flow.from)
-      : w.from === flow.from && (w.to === flow.to || w.toolUseId === flow.to));
+      ? w.from === flow.to && reaches(w, flow.from)
+      : w.from === flow.from && reaches(w, flow.to));
     if (wireIndex !== -1) next.push({ ...flow, wireIndex, pos: 0 });
     else if ((flow.tries ?? 0) + 1 < MAX_TRIES) retry.push({ ...flow, tries: (flow.tries ?? 0) + 1 });
   }

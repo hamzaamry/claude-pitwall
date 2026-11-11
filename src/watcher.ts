@@ -100,7 +100,7 @@ export class SessionWatcher {
       const m = JSON.parse(readFileSync(metaFile, 'utf8'));
       registerSubagent(state, key, {
         agentType: String(m.agentType ?? 'agent'), description: String(m.description ?? ''),
-        pickedEffortModel: m.pickedEffortModel, finished: m.finished === true,
+        finished: m.finished === true,
         toolUseId: m.toolUseId,
       });
       return m.finished === true;

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text } from 'ink';
+import { isReviewer } from '../role.js';
 import { advisorCallTokens, statusAt, type AgentInfo, type SessionState } from '../model/state.js';
 import { oneLine } from '../oneLine.js';
 import { dotCell, stepFlows, type ActiveFlow } from './flowAnim.js';
@@ -139,11 +140,12 @@ const MARK: Record<string, { text: string; color: string }> = {
 
 function drawAdvisor(g: Grid, b: Rect, state: SessionState): void {
   const calls = state.advisorCalls;
-  const configured = calls.length > 0;
+  const reviewing = Object.values(state.agents).some((a) => isReviewer(a.role) && statusAt(a, Date.now()) === 'working');
+  const configured = calls.length > 0 || reviewing;
   const color = configured ? colors.advisor : colors.dim;
   box(g, b, configured ? colors.advisor : colors.border);
   putSplit(g, b, 1, 'ADVISOR', colors.advisor, `[${state.advisorModel ?? 'opus'}]`, colors.muted);
-  put(g, b.x + 2, b.y + 2, clip(configured ? `● ${calls.length} call${calls.length === 1 ? '' : 's'}` : state.advisorModel ? '○ no calls yet' : '○ not configured', b.w - 4),
+  put(g, b.x + 2, b.y + 2, clip(reviewing ? '● reviewing…' : configured ? `● ${calls.length} call${calls.length === 1 ? '' : 's'}` : state.advisorModel ? '○ no calls yet' : '○ not configured', b.w - 4),
     configured ? colors.bright : colors.dim);
   if (configured) put(g, b.x + 2, b.y + 3, clip(`${fmtTokens(calls.reduce((n, c) => n + advisorCallTokens(state, c), 0))} tokens`, b.w - 4), colors.dim);
   for (let x = b.x + 1; x < b.x + b.w - 1; x++) put(g, x, b.y + 4, '─', colors.frame);
@@ -170,12 +172,13 @@ function drawMain(g: Grid, b: Rect, state: SessionState, frame: number): void {
   void frame;
 }
 
-function drawCard(g: Grid, b: Rect, a0: AgentInfo, frame: number): void {
+function drawCard(g: Grid, b: Rect, a0: AgentInfo, frame: number, runs = 1): void {
   const a = { ...a0, status: statusAt(a0, Date.now()) };
   const color = colorForRole(a.role);
   const inner = b.w - 4;
   box(g, b, a.status === 'working' ? color : a.status === 'failed' ? colors.failed : colors.border);
-  put(g, b.x + 2, b.y + 1, clip(a.title || a.role, inner), a.status === 'idle' || a.status === 'done' ? colors.muted : color);
+  const times = runs > 1 ? ` ×${runs}` : '';
+  put(g, b.x + 2, b.y + 1, clip(a.title || a.role, inner - times.length) + times, a.status === 'idle' || a.status === 'done' ? colors.muted : color);
   put(g, b.x + 2, b.y + 2, clip([a.role, a.model].filter(Boolean).join(' · '), inner), colors.dim);
   const st = STATUS[a.status];
   put(g, b.x + 2, b.y + 3, clip(st.mark, inner), st.color);
@@ -219,7 +222,7 @@ export function Graph({ state, width, height, tickMs = 120 }: {
   for (const b of layout.boxes) {
     if (b.key === 'advisor') drawAdvisor(g, b, state);
     else if (b.key === 'main') drawMain(g, b, state, frame);
-    else if (state.agents[b.key]) drawCard(g, b, state.agents[b.key], frame);
+    else if (state.agents[b.key]) drawCard(g, b, state.agents[b.key], frame, b.runs);
   }
   drawDots(g, layout, active.current);
 

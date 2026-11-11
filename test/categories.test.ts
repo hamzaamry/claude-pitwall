@@ -21,8 +21,12 @@ describe('categorize', () => {
   });
   it('a test command after cd is still tests', () =>
     expect(categorize([tool('Bash', { command: 'cd /repo/apps/mobile && npx tsc --noEmit' })], false)).toBe('tests'));
-  it('Bash that writes is not reading', () =>
-    expect(categorize([tool('Bash', { command: 'cat a.ts > b.ts' })], false)).toBe('talking'));
+  it('Bash that writes files is coding', () => {
+    for (const command of ['cat a.ts > b.ts', "python3 - <<'EOF'\nopen('a').write('x')\nEOF", 'sed -i s/a/b/ f.ts']) {
+      expect(categorize([tool('Bash', { command })], false), command).toBe('coding');
+    }
+    expect(categorize([tool('Bash', { command: 'npx vitest run 2>&1 | tail -5' })], false)).toBe('tests');
+  });
   it('Read, Grep, Glob, WebFetch, WebSearch are reading', () => {
     for (const n of ['Read', 'Grep', 'Glob', 'WebFetch', 'WebSearch']) {
       expect(categorize([tool(n)], false)).toBe('reading');

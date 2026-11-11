@@ -32,6 +32,12 @@ function nudge(sessionId, hookEventName) {
   return JSON.stringify({ hookSpecificOutput: { hookEventName, additionalContext: NUDGE } });
 }
 
+// A runner usually pipes its output (`npm test 2>&1 | tail -40`), so the command exits 0 and Claude Code reports a
+// success. Only the text shows the failure: words a failing run prints, minus summaries that say nothing failed.
+const FAILED_OUTPUT = /(^|\n)\s*(FAIL\b|not ok\b)|\b[1-9]\d* (failed|failing|failures?)\b|AssertionError|\bError:|✗|✖|Test failed/;
+const looksFailed = (text) => FAILED_OUTPUT.test(String(text ?? ''));
+const bashOutput = (resp) => `${resp?.stdout ?? ''}\n${resp?.stderr ?? ''}`.trim();
+
 const isRunner = (type) => /(^|:)runner$/.test(String(type ?? ''));
 const bashKey = (input) => `${commandKey(input.tool_input?.command)}:`;
 
@@ -50,6 +56,8 @@ runHook((input) => {
     return !inRunner && twice ? nudge(id, 'PostToolUseFailure') : undefined;
   }
   if (mode === 'ok' && input.tool_name === 'Bash') {
+    const out = bashOutput(input.tool_response);
+    if (inRunner && looksFailed(out)) { seenTwice(id, `sub:${bashKey(input)}${fingerprint(out)}`); return; }
     clear(id, `${inRunner ? 'sub:' : ''}${bashKey(input)}`);
     return;
   }

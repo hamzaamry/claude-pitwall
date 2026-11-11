@@ -33888,6 +33888,10 @@ function formatReset(resetsAt, now) {
 // src/ui/Graph.tsx
 var import_react22 = __toESM(require_react(), 1);
 
+// src/role.ts
+var isReviewer = (role) => /(^|:)reviewer$/.test(role);
+var shortRole = (role) => role.replace(/^[a-z0-9_-]+:/i, "");
+
 // src/model/state.ts
 var freshTriggers = () => ({ planCheck: "todo", stuck: "todo", finalReview: "todo", askOpus: "todo" });
 var IDLE_AFTER_MS = 3e4;
@@ -33933,7 +33937,8 @@ function stepFlows(active, pending, layout) {
   let looked = pending.length;
   while (next.length < MAX_DOTS && looked-- > 0) {
     const flow = pending.shift();
-    const wireIndex = layout.wires.findIndex((w) => flow.back ? w.from === flow.to && (w.to === flow.from || w.toolUseId === flow.from) : w.from === flow.from && (w.to === flow.to || w.toolUseId === flow.to));
+    const reaches = (w, id) => w.to === id || w.toolUseId === id || !!w.aliases?.includes(id);
+    const wireIndex = layout.wires.findIndex((w) => flow.back ? w.from === flow.to && reaches(w, flow.from) : w.from === flow.from && reaches(w, flow.to));
     if (wireIndex !== -1) next.push({ ...flow, wireIndex, pos: 0 });
     else if ((flow.tries ?? 0) + 1 < MAX_TRIES) retry.push({ ...flow, tries: (flow.tries ?? 0) + 1 });
   }
@@ -34000,7 +34005,18 @@ function layoutGraph(agents, width, height) {
   const midY = Math.floor(MAIN_H / 2);
   for (let x = advW; x < mainX; x++) advCells.push([x, midY]);
   if (advCells.length) wires.push({ from: "main", to: "advisor", cells: advCells });
-  const subs = agents.filter((a) => a.key !== "main");
+  const groups = /* @__PURE__ */ new Map();
+  for (const a of agents) {
+    if (a.key === "main" || isReviewer(a.role)) continue;
+    const id = `${a.role}|${a.title}`;
+    groups.set(id, [...groups.get(id) ?? [], a]);
+  }
+  const runsOf = /* @__PURE__ */ new Map();
+  const subs = [...groups.values()].map((runs) => {
+    const shown2 = [...runs].reverse().find((r) => !isFinished(r)) ?? runs[runs.length - 1];
+    runsOf.set(shown2.key, runs);
+    return shown2;
+  });
   const cardW = Math.min(CARD_W, areaW);
   const fit = Math.max(1, Math.floor((areaW + 1) / (cardW + 1)));
   const shown = pickCards(subs, fit);
@@ -34010,14 +34026,16 @@ function layoutGraph(agents, width, height) {
   const cardY = busY + 2;
   shown.forEach((a, i) => {
     const x = rowX + i * (cardW + 1);
-    boxes.push({ key: a.key, x, y: cardY, w: cardW, h: CARD_H });
+    const runs = runsOf.get(a.key) ?? [a];
+    boxes.push({ key: a.key, x, y: cardY, w: cardW, h: CARD_H, ...runs.length > 1 ? { runs: runs.length } : {} });
+    const aliases = runs.filter((r) => r !== a).flatMap((r) => [r.key, ...r.toolUseId ? [r.toolUseId] : []]);
     const cx = x + Math.floor(cardW / 2);
     const cells = [];
     for (let y = mainBottom; y <= busY; y++) cells.push([mainCx, y]);
     const step = cx >= mainCx ? 1 : -1;
     for (let px = mainCx + step; px !== cx + step && cx !== mainCx; px += step) cells.push([px, busY]);
     cells.push([cx, cardY - 1]);
-    wires.push({ from: "main", to: a.key, cells, ...a.toolUseId ? { toolUseId: a.toolUseId } : {} });
+    wires.push({ from: "main", to: a.key, cells, ...a.toolUseId ? { toolUseId: a.toolUseId } : {}, ...aliases.length ? { aliases } : {} });
   });
   return { boxes, wires };
 }
@@ -34181,7 +34199,8 @@ var MARK = {
 };
 function drawAdvisor(g, b, state) {
   const calls = state.advisorCalls;
-  const configured = calls.length > 0;
+  const reviewing = Object.values(state.agents).some((a) => isReviewer(a.role) && statusAt(a, Date.now()) === "working");
+  const configured = calls.length > 0 || reviewing;
   const color = configured ? colors.advisor : colors.dim;
   box(g, b, configured ? colors.advisor : colors.border);
   putSplit(g, b, 1, "ADVISOR", colors.advisor, `[${state.advisorModel ?? "opus"}]`, colors.muted);
@@ -34189,7 +34208,7 @@ function drawAdvisor(g, b, state) {
     g,
     b.x + 2,
     b.y + 2,
-    clip(configured ? `\u25CF ${calls.length} call${calls.length === 1 ? "" : "s"}` : state.advisorModel ? "\u25CB no calls yet" : "\u25CB not configured", b.w - 4),
+    clip(reviewing ? "\u25CF reviewing\u2026" : configured ? `\u25CF ${calls.length} call${calls.length === 1 ? "" : "s"}` : state.advisorModel ? "\u25CB no calls yet" : "\u25CB not configured", b.w - 4),
     configured ? colors.bright : colors.dim
   );
   if (configured) put(g, b.x + 2, b.y + 3, clip(`${fmtTokens(calls.reduce((n, c) => n + advisorCallTokens(state, c), 0))} tokens`, b.w - 4), colors.dim);
@@ -34214,12 +34233,13 @@ function drawMain(g, b, state, frame) {
   const used = putEffort(g, b.x + 9, b.y + 3, a0?.effort, colors.main, inner - 7);
   if (!used) put(g, b.x + 9, b.y + 3, clip("unknown", inner - 7), colors.dim);
 }
-function drawCard(g, b, a0, frame) {
+function drawCard(g, b, a0, frame, runs = 1) {
   const a = { ...a0, status: statusAt(a0, Date.now()) };
   const color = colorForRole(a.role);
   const inner = b.w - 4;
   box(g, b, a.status === "working" ? color : a.status === "failed" ? colors.failed : colors.border);
-  put(g, b.x + 2, b.y + 1, clip(a.title || a.role, inner), a.status === "idle" || a.status === "done" ? colors.muted : color);
+  const times = runs > 1 ? ` \xD7${runs}` : "";
+  put(g, b.x + 2, b.y + 1, clip(a.title || a.role, inner - times.length) + times, a.status === "idle" || a.status === "done" ? colors.muted : color);
   put(g, b.x + 2, b.y + 2, clip([a.role, a.model].filter(Boolean).join(" \xB7 "), inner), colors.dim);
   const st = STATUS[a.status];
   put(g, b.x + 2, b.y + 3, clip(st.mark, inner), st.color);
@@ -34257,7 +34277,7 @@ function Graph({ state, width, height, tickMs = 120 }) {
   for (const b of layout.boxes) {
     if (b.key === "advisor") drawAdvisor(g, b, state);
     else if (b.key === "main") drawMain(g, b, state, frame);
-    else if (state.agents[b.key]) drawCard(g, b, state.agents[b.key], frame);
+    else if (state.agents[b.key]) drawCard(g, b, state.agents[b.key], frame, b.runs);
   }
   drawDots(g, layout, active.current);
   const title = innerW >= "live flow".length + LEGEND.length + 2 ? "live flow" + " ".repeat(innerW - "live flow".length - LEGEND.length) + LEGEND : clip("live flow", innerW);
@@ -34547,9 +34567,6 @@ import { existsSync as existsSync4, readFileSync as readFileSync3 } from "node:f
 import { homedir as homedir4 } from "node:os";
 import { join as join4 } from "node:path";
 
-// src/role.ts
-var shortRole = (role) => role.replace(/^[a-z0-9_-]+:/i, "");
-
 // src/model/categories.ts
 var TEST_COMMAND = /\b(test|vitest|jest|pytest|tsc|lint|build|cargo check|go vet)\b/;
 var LOOKS_ONLY = /^(ls|cat|head|tail|grep|egrep|rg|find|tree|wc|stat|file|less|awk|sed -n|git (diff|log|show|status|grep|blame))\b/;
@@ -34557,9 +34574,17 @@ function onlyLooks(command2) {
   const c = command2.trim().replace(/^cd\s+[^;&|]+(&&|;)\s*/, "");
   return LOOKS_ONLY.test(c) && !c.replace(/2>&1|2>\/dev\/null/g, "").includes(">");
 }
+function writesFiles(command2) {
+  const bare = command2.replace(/'[^']*'|"(\\.|[^"\\])*"/g, "''");
+  return /\b(python3?|node|ruby|perl)\s+-\s*<</.test(bare) || /\bsed\s+-i\b|\bperl\s+-[a-z]*i\b|\btee\b/.test(bare) || /(^|[^0-9&>])>>?\s*(?!&|\/dev\/null)[^\s|&;]/.test(bare);
+}
 function categorize(blocks, hasEdited) {
   const tools = blocks.filter((b) => b.type === "tool_use");
-  if (tools.some((t) => ["Edit", "Write", "NotebookEdit"].includes(t.name))) return "coding";
+  if (tools.some((t) => ["Edit", "Write", "NotebookEdit"].includes(t.name) || t.name === "Bash" && writesFiles(String(t.input.command ?? "")))) return "coding";
+  const sentTo = (re) => tools.some((t) => t.name === "Agent" && re.test(String(t.input.subagent_type ?? "")));
+  if (tools.some((t) => ["EnterPlanMode", "ExitPlanMode", "SendMessage"].includes(t.name)) || sentTo(/(^|:)(reviewer|Plan)$/)) return "planning";
+  if (sentTo(/(^|:)runner$/)) return "tests";
+  if (sentTo(/(^|:)(scout|Explore)$/)) return "reading";
   if (tools.some((t) => t.name === "Bash" && TEST_COMMAND.test(String(t.input.command ?? "")))) return "tests";
   if (tools.some((t) => ["Read", "Grep", "Glob", "WebFetch", "WebSearch"].includes(t.name) || t.name === "Bash" && onlyLooks(String(t.input.command ?? "")))) return "reading";
   const chars = blocks.reduce((n, b) => n + (b.type === "text" ? b.chars : 0), 0);
@@ -34598,7 +34623,6 @@ function registerSubagent(s, key, meta) {
   const a = agentFor(s, key);
   a.role = shortRole(meta.agentType);
   a.title = oneLine(meta.description);
-  if (meta.pickedEffortModel) a.model = modelAlias(meta.pickedEffortModel);
   if (meta.toolUseId) a.toolUseId = meta.toolUseId;
   const time = s.lastActivity ?? "";
   if (meta.toolUseId && s.failedToolUseIds.has(meta.toolUseId)) settle(s, a, "failed", time);
@@ -34610,9 +34634,19 @@ function onToolUse(s, key, time, b) {
     const description = oneLine(String(b.input.description ?? ""));
     const type = String(b.input.subagent_type ?? "general-purpose");
     const shown = shortRole(type);
-    s.pendingFlows.push({ from: key, to: b.id, label: description, color: colorForRole(type), at: time });
-    s.spawns.set(b.id, { from: key, type, askOpus: String(b.input.prompt ?? "").trimStart().startsWith("ASK-OPUS:") });
+    s.pendingFlows.push({ from: key, to: isReviewer(type) ? "advisor" : b.id, label: description, color: colorForRole(type), at: time });
+    const prompt = String(b.input.prompt ?? "").trimStart();
+    s.spawns.set(b.id, { from: key, type, askOpus: prompt.startsWith("ASK-OPUS:"), planCheck: prompt.startsWith("PLAN-CHECK:") });
     log(s, time, who, `${who} \u2192 ${shown}: ${description}`);
+  } else if (b.name === "SendMessage" && isReviewer(s.agents[String(b.input.to ?? "")]?.role ?? "")) {
+    const message = String(b.input.message ?? "").trimStart();
+    const why = message.startsWith("ASK-OPUS:") ? "ask-opus" : message.startsWith("PLAN-CHECK:") ? "plan check" : "final review";
+    s.pendingFlows.push({ from: key, to: "advisor", label: why, color: colorForRole("reviewer"), at: time });
+    s.advisorCalls.push({ time, source: "reviewer", why, tokens: 0, taskNo: s.taskNo });
+    if (why === "ask-opus") s.triggers.askOpus = "done";
+    else if (why === "plan check") s.triggers.planCheck = "done";
+    else s.triggers.finalReview = "done";
+    log(s, time, who, `${who} \u2192 reviewer (continued): ${why}`);
   } else if (b.name === "Skill") {
     const name = String(b.input.skill ?? "");
     if (!name) return;
@@ -34630,15 +34664,14 @@ function onToolUse(s, key, time, b) {
     log(s, time, who, `ran ${clip3(String(b.input.command), 50)}`);
   }
 }
-var VERDICT = /^(approved|needs info|fix)\b/i;
-var isReviewer = (type) => /(^|:)reviewer$/.test(type);
+var VERDICT = /^(plan approved|approved|needs info|fix)\b/i;
 var firstLine = (t) => t.split("\n").map((l) => l.trim()).find(Boolean) ?? "";
 function onAgentResult(s, e) {
   const spawn = s.spawns.get(e.toolUseId);
   if (!spawn) return;
   const card = Object.values(s.agents).find((a) => a.toolUseId === e.toolUseId);
   s.pendingFlows.push({
-    from: card?.key ?? e.toolUseId,
+    from: isReviewer(spawn.type) ? "advisor" : card?.key ?? e.toolUseId,
     to: spawn.from,
     back: true,
     at: e.time,
@@ -34647,11 +34680,11 @@ function onAgentResult(s, e) {
   });
   if (!isReviewer(spawn.type) || e.isError) return;
   const verdict = firstLine(e.text).match(VERDICT)?.[1].toLowerCase();
-  const askOpus = spawn.askOpus;
+  const { askOpus, planCheck } = spawn;
   s.advisorCalls.push({
     time: e.time,
     source: "reviewer",
-    why: askOpus ? "ask-opus" : "final review",
+    why: askOpus ? "ask-opus" : planCheck ? "plan check" : "final review",
     result: askOpus ? void 0 : verdict,
     text: oneLine(e.text),
     tokens: card?.tokens ?? 0,
@@ -34659,13 +34692,16 @@ function onAgentResult(s, e) {
     toolUseId: e.toolUseId
   });
   if (askOpus) s.triggers.askOpus = "done";
+  else if (planCheck) s.triggers.planCheck = "done";
   else s.triggers.finalReview = "done";
   log(s, e.time, "reviewer", askOpus ? "answered" : `verdict: ${verdict ?? "unclear"}`);
 }
 var EDIT_TOOLS = ["Edit", "Write", "NotebookEdit"];
 function slim(b) {
   if (b.type !== "tool_use") return b;
-  return { ...b, input: b.name === "Bash" ? { command: String(b.input.command ?? "") } : {} };
+  if (b.name === "Bash") return { ...b, input: { command: String(b.input.command ?? "") } };
+  if (b.name === "Agent") return { ...b, input: { subagent_type: String(b.input.subagent_type ?? "") } };
+  return { ...b, input: {} };
 }
 function applyEvent(s, agentKey, e) {
   if (e.time) {
@@ -35020,7 +35056,6 @@ var SessionWatcher = class {
       registerSubagent(state, key, {
         agentType: String(m.agentType ?? "agent"),
         description: String(m.description ?? ""),
-        pickedEffortModel: m.pickedEffortModel,
         finished: m.finished === true,
         toolUseId: m.toolUseId
       });

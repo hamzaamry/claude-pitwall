@@ -139,6 +139,37 @@ describe('same-error: the runner\'s command fails the same way in two runs (Post
     runnerFails('Exit code 1\nTypeError: x is not a function');
     expect(anyReply().stdout).toBe('');
   });
+  describe('the runner pipes its output, so the command exits 0 and only the text shows the failure', () => {
+    const piped = (stdout: string, command = 'npm test 2>&1 | tail -40') =>
+      ok(command, { ...sub, tool_response: { stdout, stderr: '' } });
+    const failing = 'FAIL test.js\nAssertionError [ERR_ASSERTION]: add(2,3) should be 5\n  actual -1 expected 5\nnpm ERR! Test failed.';
+    it('two runs with the same failing output nudge main when the reply arrives', () => {
+      teamOn();
+      piped(failing); expect(anyReply('1 failed').stdout).toBe('');
+      piped(failing.replace('-1', '-2'));
+      expect(anyReply('some other wording').stdout).not.toBe('');
+      expect(nudges()).toHaveLength(1);
+    });
+    it('passing output, including a summary that says "0 failed", is not a failure and clears the count', () => {
+      teamOn();
+      piped(failing);
+      piped('Tests  12 passed, 0 failed (12)\nall tests passed');
+      piped(failing);
+      expect(anyReply().stdout).toBe('');
+    });
+    it('a different failing output is a different failure', () => {
+      teamOn();
+      piped(failing);
+      piped('FAIL other.test.js\nTypeError: x is not a function');
+      expect(anyReply().stdout).toBe('');
+    });
+    it('main\'s own piped command is never counted as a runner failure', () => {
+      teamOn();
+      ok('npm test 2>&1 | tail -40', { tool_response: { stdout: failing } });
+      ok('npm test 2>&1 | tail -40', { tool_response: { stdout: failing } });
+      expect(anyReply().stdout).toBe('');
+    });
+  });
   it('a success inside the runner clears the count', () => {
     teamOn();
     runnerFails();
