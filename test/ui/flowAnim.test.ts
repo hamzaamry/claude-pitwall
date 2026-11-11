@@ -37,10 +37,24 @@ describe('stepFlows', () => {
     expect(a).toHaveLength(6);
     expect(pending).toHaveLength(4);
   });
+});
 
-  it('drops a flow whose card is not on screen', () => {
-    const pending = [flow('toolu_gone')];
-    expect(stepFlows([], pending, layout)).toEqual([]);
+describe('stepFlows: a card that has not appeared yet', () => {
+  it('keeps the flow queued for a while, then gives up', () => {
+    const pending = [flow('toolu_late')];
+    stepFlows([], pending, layout);
+    expect(pending).toHaveLength(1);
+    for (let i = 0; i < 30; i++) stepFlows([], pending, layout);
+    expect(pending).toHaveLength(0);
+  });
+
+  it('starts the flow as soon as its card exists', () => {
+    const pending = [flow('toolu_late')];
+    stepFlows([], pending, layout);
+    const later: GraphLayout = { ...layout, wires: [...layout.wires, { from: 'main', to: 'a9', toolUseId: 'toolu_late', cells: [[1, 1], [1, 2]] }] };
+    const a = stepFlows([], pending, later);
+    expect(a).toHaveLength(1);
+    expect(a[0].wireIndex).toBe(2);
     expect(pending).toHaveLength(0);
   });
 });

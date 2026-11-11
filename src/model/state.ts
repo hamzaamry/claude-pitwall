@@ -4,7 +4,7 @@ export type AgentInfo = { key: string; role: string; model: string; effort?: str
   toolUseId?: string };
 export type AdvisorCall = { time: string; source: 'native' | 'reviewer'; why: string; result?: string; tokens: number; text?: string };
 export type LogEntry = { time: string; who: string; text: string };
-export type Flow = { from: string; to: string; label: string; color: string };
+export type Flow = { from: string; to: string; label: string; color: string; tries?: number };
 export type SessionState = {
   sessionId: string; currentTask: string; startedAt?: string; lastActivity?: string;
   agents: Record<string, AgentInfo>;      // key 'main' + one per subagent id
