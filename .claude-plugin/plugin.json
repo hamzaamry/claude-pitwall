@@ -1,0 +1,8 @@
+{
+  "name": "pitwall",
+  "description": "Live terminal dashboard of your Claude Code agents, models, effort and token use",
+  "version": "0.1.0",
+  "license": "MIT",
+  "keywords": ["dashboard", "monitoring", "agents", "tokens", "claude-code"],
+  "commands": ["./commands/setup.md", "./commands/watch.md"]
+}
