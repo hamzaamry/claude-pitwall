@@ -18,6 +18,14 @@
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/event-log.mjs\""
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/review-gate.mjs\" mark"
+          }
+        ]
       }
     ],
     "PreToolUse": [
@@ -55,6 +63,14 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/event-log.mjs\""
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/review-gate.mjs\" gate"
           }
         ]
       }
