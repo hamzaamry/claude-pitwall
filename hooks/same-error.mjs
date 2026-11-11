@@ -2,7 +2,9 @@
 //   same-error.mjs fail   (PostToolUseFailure, Bash): main's own failing command. Failures inside a subagent are
 //                         ignored: it has no advisor and main would never see the note.
 //   same-error.mjs ok     (PostToolUse, Bash):        a success clears that command's failures ("twice in a row").
-//   same-error.mjs agent  (PostToolUse, Agent):       the runner's reply failed the same way twice.
+//   same-error.mjs agent  (PostToolUse, Agent):       a runner has come back, and its command failed the same way in two
+//                         runs. The runner's own failing commands are only counted (sub:); the nudge goes out when its
+//                         reply reaches main, because only main can act on it. Reply wording is never parsed: Haiku paraphrases.
 // A failing Bash command fires PostToolUseFailure, not PostToolUse: see docs/notes/verify-team.md.
 import { appendEvent, readState, runHook, teamOn, writeState } from './lib/hook.mjs';
 import { commandKey, fingerprint } from './lib/fingerprint.mjs';
@@ -30,27 +32,33 @@ function nudge(sessionId, hookEventName) {
   return JSON.stringify({ hookSpecificOutput: { hookEventName, additionalContext: NUDGE } });
 }
 
-/** The text of a runner's reply: the text parts of the Agent tool response without the harness note. */
-const replyText = (resp) => (Array.isArray(resp?.content) ? resp.content : [])
-  .filter((c) => c?.type === 'text').map((c) => String(c.text).replace(/<tools-used-before-summary>[\s\S]*?<\/tools-used-before-summary>/g, '')).join('\n').trim();
+const isRunner = (type) => /(^|:)runner$/.test(String(type ?? ''));
+const bashKey = (input) => `${commandKey(input.tool_input?.command)}:`;
 
 const mode = process.argv[2];
 runHook((input) => {
   const id = input.session_id;
-  if (!id || input.agent_id || !teamOn(input)) return;
+  if (!id || !teamOn(input)) return;
+  const inRunner = !!input.agent_id && isRunner(input.agent_type);
+  if (input.agent_id && !inRunner) return; // other subagents have no advisor and main never sees their notes
 
   if (mode === 'fail' && input.tool_name === 'Bash') {
     const text = String(input.error ?? '').replace(/^\s*Exit code \d+\s*/, '').trim();
     if (!text) return; // "Exit code 1" and nothing else (grep with no match, test -f): not a failure worth counting
-    return seenTwice(id, `${commandKey(input.tool_input?.command)}:${fingerprint(text)}`) ? nudge(id, 'PostToolUseFailure') : undefined;
+    const key = `${inRunner ? 'sub:' : ''}${bashKey(input)}${fingerprint(text)}`;
+    const twice = seenTwice(id, key);
+    return !inRunner && twice ? nudge(id, 'PostToolUseFailure') : undefined;
   }
   if (mode === 'ok' && input.tool_name === 'Bash') {
-    clear(id, `${commandKey(input.tool_input?.command)}:`);
+    clear(id, `${inRunner ? 'sub:' : ''}${bashKey(input)}`);
     return;
   }
-  if (mode === 'agent' && input.tool_name === 'Agent' && /(^|:)runner$/.test(String(input.tool_response?.agentType ?? ''))) {
-    const text = replyText(input.tool_response);
-    if (!/^(\d+ failed|failed)\b/i.test(text)) { clear(id, 'runner:'); return; }
-    return seenTwice(id, `runner:${fingerprint(text)}`) ? nudge(id, 'PostToolUse') : undefined;
+  if (mode === 'agent' && input.tool_name === 'Agent' && !input.agent_id && isRunner(input.tool_response?.agentType)) {
+    const state = readState(id);
+    const errors = state.errors && typeof state.errors === 'object' ? state.errors : {};
+    const pending = Object.keys(errors).filter((k) => k.startsWith('sub:') && errors[k] >= 2 && !(state.nudged ?? {})[k]);
+    if (pending.length === 0) return;
+    writeState(id, { ...state, nudged: { ...(state.nudged ?? {}), ...Object.fromEntries(pending.map((k) => [k, true])) } });
+    return nudge(id, 'PostToolUse');
   }
 });

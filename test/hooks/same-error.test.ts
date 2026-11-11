@@ -114,36 +114,55 @@ describe('same-error: a failing Bash command (PostToolUseFailure)', () => {
   });
 });
 
-describe('same-error: the runner reports the same failure twice (PostToolUse on the Agent tool)', () => {
-  const reply = '2 failed\nFAIL test/a.test.ts > adds\nAssertionError: expected 1 to be 2';
-  it('the second identical failing reply nudges main', () => {
+describe('same-error: the runner\'s command fails the same way in two runs (PostToolUse on the Agent tool)', () => {
+  const sub = { agent_id: 'a1', agent_type: 'pitwall:runner' };
+  const err = 'Exit code 1\nAssertionError: add(2,3) should be 5\n  actual -1';
+  // the runner's own failing Bash command: counted, never nudged (main never sees it)
+  const runnerFails = (error = err, command = 'npm test', extra: object = sub) => fail(error, command, extra);
+  const anyReply = (text = 'whatever words Haiku chose today') => runnerReply(text);
+
+  it('the second run that fails the same way nudges main when its reply arrives; wording of the reply does not matter', () => {
     teamOn();
-    expect(runnerReply(reply).stdout).toBe('');
-    const out = JSON.parse(runnerReply(reply).stdout).hookSpecificOutput;
+    expect(runnerFails().stdout).toBe('');
+    expect(anyReply('1 failed').stdout).toBe('');
+    expect(runnerFails().stdout).toBe('');
+    const out = JSON.parse(anyReply('The npm test run failed: 1 failing assertion.').stdout).hookSpecificOutput;
     expect(out.hookEventName).toBe('PostToolUse');
     expect(out.additionalContext).toContain('advisor');
+    expect(nudges()).toEqual([expect.objectContaining({ kind: 'same-error' })]);
+    expect(anyReply('again').stdout).toBe('');
     expect(nudges()).toHaveLength(1);
-    expect(runnerReply(reply).stdout).toBe('');
   });
-  it('a different failure, an all-passed reply, or another kind of agent does not count', () => {
+  it('a different failure, or the same command failing differently, does not count', () => {
     teamOn();
-    runnerReply(reply);
-    expect(runnerReply('1 failed\nFAIL test/b.test.ts\nTypeError: nope').stdout).toBe('');
-    expect(runnerReply('all passed · 12 tests').stdout).toBe('');
-    runnerReply(reply, {}, 'pitwall:scout');
-    expect(runnerReply(reply, {}, 'pitwall:scout').stdout).toBe('');
+    runnerFails();
+    runnerFails('Exit code 1\nTypeError: x is not a function');
+    expect(anyReply().stdout).toBe('');
   });
-  it('a passing reply resets the count', () => {
+  it('a success inside the runner clears the count', () => {
     teamOn();
-    runnerReply(reply);
-    runnerReply('all passed · 12 tests');
-    expect(runnerReply(reply).stdout).toBe('');
+    runnerFails();
+    ok('npm test', sub);
+    runnerFails();
+    expect(anyReply().stdout).toBe('');
+  });
+  it('failures of other subagents (a scout) and of main are not runner failures', () => {
+    teamOn();
+    fail(err, 'npm test', { agent_id: 'a2', agent_type: 'pitwall:scout' });
+    fail(err, 'npm test', { agent_id: 'a2', agent_type: 'pitwall:scout' });
+    expect(anyReply().stdout).toBe('');
+  });
+  it('a reply from another kind of agent never nudges', () => {
+    teamOn();
+    runnerFails(); runnerFails();
+    expect(runnerReply('x', {}, 'pitwall:scout').stdout).toBe('');
   });
   it('team off, a call made inside a subagent, or a malformed response: nothing', () => {
-    expect(runnerReply(reply).stdout).toBe('');
+    runnerFails(); runnerFails();
+    expect(anyReply().stdout).toBe('');
     teamOn();
-    runnerReply(reply, { agent_id: 'a1' });
-    expect(runnerReply(reply, { agent_id: 'a1' }).stdout).toBe('');
+    runnerFails(); runnerFails();
+    expect(runnerReply('x', { agent_id: 'a1' }).stdout).toBe('');
     const weird = call('agent', { hook_event_name: 'PostToolUse', tool_name: 'Agent', tool_response: 'just a string' });
     expect([weird.status, weird.stdout]).toEqual([0, '']);
   });
