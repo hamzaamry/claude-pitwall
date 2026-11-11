@@ -29,7 +29,7 @@ const clip = (t: string, n: number) => (t.length > n ? t.slice(0, n - 1) + '…'
 const baseName = (p: unknown) => String(p ?? '').split('/').pop() || 'a file';
 
 /** A helper finishing or failing is worth a log line, once. */
-function settle(s: SessionState, a: AgentInfo, status: 'done' | 'failed', time: string): void {
+export function settle(s: SessionState, a: AgentInfo, status: 'done' | 'failed', time: string): void {
   if (a.status === status || (a.status === 'failed' && status === 'done')) return;
   a.status = status;
   log(s, time, a.role, `${status === 'done' ? 'finished' : 'failed'} ${a.title}`.trim());

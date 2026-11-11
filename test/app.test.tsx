@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
 import { render } from 'ink-testing-library';
-import { cpSync, mkdtempSync, mkdirSync } from 'node:fs';
+import { cpSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { App } from '../src/App.js';
@@ -60,6 +60,19 @@ describe('App', () => {
   it('shows no team pill in phase 1', () => {
     cpSync(FIXTURE, projectDir, { recursive: true });
     expect(show(170)).not.toContain('team');
+  });
+
+  it('shows the team pill from the flag, and none without an events file', () => {
+    cpSync(FIXTURE, projectDir, { recursive: true });
+    const SID = '11111111-1111-1111-1111-111111111111';
+    expect(show(170)).not.toContain('team');
+    const pw = join(home, '.claude', 'pitwall');
+    mkdirSync(join(pw, 'events'), { recursive: true });
+    writeFileSync(join(pw, 'events', `${SID}.jsonl`), JSON.stringify({ t: new Date().toISOString(), session: SID, event: 'Stop' }) + '\n');
+    expect(show(170)).toContain('[team off]');
+    mkdirSync(join(pw, 'team'), { recursive: true });
+    writeFileSync(join(pw, 'team', SID), '');
+    expect(show(170)).toContain('[team on]');
   });
 
   it('has a footer with the quit key', () => {

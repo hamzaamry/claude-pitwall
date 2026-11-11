@@ -17,6 +17,8 @@ export type SessionState = {
   log: LogEntry[];                        // capped at 200 entries
   pendingFlows: Flow[];                   // consumed by the graph animation
   hasEdited: boolean;                     // main has edited since the last user prompt
+  teamOn?: boolean;                       // undefined until the pitwall hooks have written an events file
+  nudges: Record<string, string>;         // hook nudges by kind -> time
   advisorModel?: string;                  // set on every assistant line once an advisor is configured
   taskNo: number;                         // counts main user prompts; categories belong to the current one
   // bookkeeping for messages written on several lines (one line per content block)
@@ -36,7 +38,7 @@ export function emptyState(sessionId: string): SessionState {
   return {
     sessionId, currentTask: '', agents: {}, seenMessageIds: new Set(), skills: [], advisorCalls: [],
     categories: { coding: 0, reading: 0, talking: 0, planning: 0, tests: 0 },
-    log: [], pendingFlows: [], hasEdited: false, taskNo: 0,
+    log: [], pendingFlows: [], hasEdited: false, taskNo: 0, nudges: {},
     msgInfo: new Map(), seenToolIds: new Set(), failedToolUseIds: new Set(),
   };
 }

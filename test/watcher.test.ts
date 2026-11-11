@@ -182,4 +182,51 @@ describe('SessionWatcher', () => {
       usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }) + '\n');
     expect(new SessionWatcher({ cwd: CWD, home }).poll()!.pendingFlows).toHaveLength(1);
   });
+
+  describe('pitwall events and team flag', () => {
+    const eventsFile = () => join(home, '.claude', 'pitwall', 'events', `${SID}.jsonl`);
+    const writeEvents = (lines: string[]) => {
+      mkdirSync(join(home, '.claude', 'pitwall', 'events'), { recursive: true });
+      writeFileSync(eventsFile(), lines.join('\n') + '\n');
+    };
+    const evLine = (o: object) => JSON.stringify({ t: new Date().toISOString(), session: SID, ...o });
+
+    it('no events file: teamOn is undefined (phase 1 behaviour)', () => {
+      cpSync(FIXTURE, projectDir, { recursive: true });
+      expect(new SessionWatcher({ cwd: CWD, home }).poll()!.teamOn).toBeUndefined();
+    });
+
+    it('events file without the flag: teamOn is false; with the flag: true', () => {
+      cpSync(FIXTURE, projectDir, { recursive: true });
+      writeEvents([evLine({ event: 'Stop' })]);
+      const w = new SessionWatcher({ cwd: CWD, home });
+      expect(w.poll()!.teamOn).toBe(false);
+      mkdirSync(join(home, '.claude', 'pitwall', 'team'), { recursive: true });
+      writeFileSync(join(home, '.claude', 'pitwall', 'team', SID), '');
+      expect(w.poll()!.teamOn).toBe(true);
+    });
+
+    it('applies subagent events and nudges as they are appended', () => {
+      cpSync(FIXTURE, projectDir, { recursive: true });
+      writeEvents([evLine({ event: 'SubagentStart', agent: 'live1', agentType: 'pitwall:scout' })]);
+      const w = new SessionWatcher({ cwd: CWD, home });
+      expect(w.poll()!.agents.live1).toMatchObject({ role: 'pitwall:scout', status: 'working' });
+      appendFileSync(eventsFile(), evLine({ event: 'SubagentStop', agent: 'live1' }) + '\n' + evLine({ event: 'Nudge', kind: 'review-gate' }) + '\n');
+      const s = w.poll()!;
+      expect(s.agents.live1.status).toBe('done');
+      expect(s.nudges['review-gate']).toBeTruthy();
+    });
+
+    it('buffers a half-written last events line, ignores events of another session and bad lines', () => {
+      cpSync(FIXTURE, projectDir, { recursive: true });
+      writeEvents(['garbage', evLine({ event: 'SubagentStart', agent: 'x1', agentType: 'a' }).replace(SID, 'other')]);
+      const w = new SessionWatcher({ cwd: CWD, home });
+      expect(w.poll()!.agents.x1).toBeUndefined();
+      const line = evLine({ event: 'SubagentStart', agent: 'half1', agentType: 'a' });
+      appendFileSync(eventsFile(), line.slice(0, 30));
+      expect(w.poll()!.agents.half1).toBeUndefined();
+      appendFileSync(eventsFile(), line.slice(30) + '\n');
+      expect(w.poll()!.agents.half1).toBeDefined();
+    });
+  });
 });

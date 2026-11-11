@@ -1,4 +1,8 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { applyPitwallEvent, parseEvent } from './events.js';
+import { isTeamOn, teamKey } from './team.js';
 import { applyEvent, registerSubagent } from './model/reduce.js';
 import { emptyState, type SessionState } from './model/state.js';
 import { listSessions, projectDirFor, subagentFiles, type SessionFile } from './transcript/locate.js';
@@ -12,18 +16,21 @@ const QUIET_MS = 30_000;
 const LIVE_FLOW_MS = 10_000;
 
 type Ctx = {
-  state: SessionState; mainTail: FileTail; subs: Map<string, { tail: FileTail; finished: boolean }>;
+  state: SessionState; mainTail: FileTail; eventsFile: string; eventsTail: FileTail;
+  subs: Map<string, { tail: FileTail; finished: boolean }>;
 };
 
 export class SessionWatcher {
   private projectDir: string;
   private pinned?: string;
+  private pitwallDir: string;
   private current?: string;
   private known = new Set<string>();
   private ctxs = new Map<string, Ctx>();
 
-  constructor(opts: { cwd: string; home?: string; sessionId?: string }) {
+  constructor(opts: { cwd: string; home?: string; sessionId?: string; pitwallHome?: string }) {
     this.projectDir = projectDirFor(opts.cwd, opts.home);
+    this.pitwallDir = opts.pitwallHome ?? process.env.PITWALL_HOME ?? join(opts.home ?? homedir(), '.claude', 'pitwall');
     this.pinned = opts.sessionId;
   }
 
@@ -49,7 +56,8 @@ export class SessionWatcher {
     this.current = target.id;
     let ctx = this.ctxs.get(target.id);
     if (!ctx) {
-      ctx = { state: emptyState(target.id), mainTail: new FileTail(target.file), subs: new Map() };
+      const eventsFile = join(this.pitwallDir, 'events', `${target.id}.jsonl`);
+      ctx = { state: emptyState(target.id), mainTail: new FileTail(target.file), eventsFile, eventsTail: new FileTail(eventsFile), subs: new Map() };
       this.ctxs.set(target.id, ctx);
     }
     const state = ctx.state;
@@ -65,6 +73,13 @@ export class SessionWatcher {
       if (!sub.finished) sub.finished = this.readMeta(state, f.key, f.metaFile);
       for (const line of sub.tail.readNew()) this.apply(state, f.key, line);
     }
+
+    // The hooks' own log: exact agent start/stop and nudges. Missing when the plugin's hooks are not installed.
+    for (const line of ctx.eventsTail.readNew()) {
+      const e = parseEvent(line);
+      if (e) applyPitwallEvent(state, e);
+    }
+    state.teamOn = existsSync(ctx.eventsFile) ? isTeamOn(teamKey({ sessionId: target.id }), this.pitwallDir) : undefined;
 
     const cutoff = Date.now() - LIVE_FLOW_MS;
     for (let i = state.pendingFlows.length - 1; i >= 0; i--) {
