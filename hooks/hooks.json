@@ -28,6 +28,15 @@
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/event-log.mjs\""
           }
         ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/read-cap.mjs\""
+          }
+        ]
       }
     ],
     "PostToolUse": [
