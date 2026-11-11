@@ -1,5 +1,8 @@
 {
   "name": "pitwall",
+  "owner": {
+    "name": "pitwall contributors"
+  },
   "metadata": {
     "description": "Live terminal dashboard of your Claude Code agents, models, effort and token use",
     "version": "0.1.0"
@@ -10,7 +13,12 @@
       "source": "./",
       "description": "Live terminal dashboard: every agent with its model, effort and tokens, plus your limits, advisor calls, skills and where the tokens went.",
       "category": "monitoring",
-      "tags": ["dashboard", "monitoring", "agents", "tokens"]
+      "tags": [
+        "dashboard",
+        "monitoring",
+        "agents",
+        "tokens"
+      ]
     }
   ]
 }

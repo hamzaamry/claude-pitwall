@@ -19,6 +19,8 @@ describe('plugin manifests', () => {
   it('marketplace.json lists pitwall from the repo root', () => {
     const m = json('.claude-plugin/marketplace.json');
     const entry = m.plugins.find((x: { name: string }) => x.name === 'pitwall');
+    expect(typeof m.owner?.name).toBe('string'); // Claude Code rejects a marketplace without an owner object
+    expect(m.owner.name.length).toBeGreaterThan(0);
     expect(entry.source).toBe('./');
     expect(entry.category).toBe('monitoring');
   });
