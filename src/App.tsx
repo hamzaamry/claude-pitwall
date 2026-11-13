@@ -11,6 +11,8 @@ import { SessionWatcher } from './watcher.js';
 // Sidebar width by terminal width: full from 160 columns, narrower from 100, hidden below that.
 const sidebarWidth = (w: number) => (w >= 160 ? STATS_WIDTH : w >= 100 ? 34 : 0);
 const LOG_ROWS = 7;
+const FOOTER_ROWS = 1;
+const MIN_GRAPH_ROWS = 16;
 
 function useTermSize(width?: number, height?: number): { width: number; height: number } {
   const { stdout } = useStdout();
@@ -54,16 +56,19 @@ export function App({ cwd, home, sessionId, width, height, pollMs = 500, tickMs 
   const side = sidebarWidth(size.width);
   const showStats = side > 0;
   const graphWidth = showStats ? size.width - side - 1 : size.width;
-  const graphHeight = Math.max(16, size.height - headerHeight(state, size.width) - logHeight(LOG_ROWS) - 1);
+  // Ink redraws the whole screen (flicker) when the frame is as tall as the terminal: keep one row free.
+  const free = Math.max(0, size.height - headerHeight(state, size.width) - FOOTER_ROWS - 1);
+  const showLog = free - logHeight(LOG_ROWS) >= MIN_GRAPH_ROWS;
+  const graphHeight = showLog ? free - logHeight(LOG_ROWS) : free;
   const limits = readLimits(state.sessionId, home);
 
   return (
     <Box flexDirection="column" width={size.width}>
       <Header state={state} teamOn={state.teamOn} now={now} width={size.width} />
-      <Box>
+      <Box height={free} overflow="hidden">
         <Box flexDirection="column">
           <Graph state={state} width={graphWidth} height={graphHeight} tickMs={tickMs} />
-          <Log entries={state.log} rows={LOG_ROWS} width={graphWidth} />
+          {showLog ? <Log entries={state.log} rows={LOG_ROWS} width={graphWidth} /> : null}
         </Box>
         {showStats ? <Box marginLeft={1}><Stats state={state} limits={limits} now={now} width={side} /></Box> : null}
       </Box>

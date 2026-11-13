@@ -35070,6 +35070,8 @@ var SessionWatcher = class {
 var import_jsx_runtime5 = __toESM(require_jsx_runtime(), 1);
 var sidebarWidth = (w) => w >= 160 ? STATS_WIDTH : w >= 100 ? 34 : 0;
 var LOG_ROWS = 7;
+var FOOTER_ROWS = 1;
+var MIN_GRAPH_ROWS = 16;
 function useTermSize(width, height) {
   const { stdout } = use_stdout_default();
   const read = () => ({ width: width ?? stdout?.columns ?? 120, height: height ?? stdout?.rows ?? 45 });
@@ -35119,14 +35121,16 @@ function App2({ cwd: cwd2, home, sessionId, width, height, pollMs = 500, tickMs 
   const side = sidebarWidth(size.width);
   const showStats = side > 0;
   const graphWidth = showStats ? size.width - side - 1 : size.width;
-  const graphHeight = Math.max(16, size.height - headerHeight(state, size.width) - logHeight(LOG_ROWS) - 1);
+  const free = Math.max(0, size.height - headerHeight(state, size.width) - FOOTER_ROWS - 1);
+  const showLog = free - logHeight(LOG_ROWS) >= MIN_GRAPH_ROWS;
+  const graphHeight = showLog ? free - logHeight(LOG_ROWS) : free;
   const limits = readLimits(state.sessionId, home);
   return /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(Box_default, { flexDirection: "column", width: size.width, children: [
     /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Header, { state, teamOn: state.teamOn, now, width: size.width }),
-    /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(Box_default, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(Box_default, { height: free, overflow: "hidden", children: [
       /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(Box_default, { flexDirection: "column", children: [
         /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Graph, { state, width: graphWidth, height: graphHeight, tickMs }),
-        /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Log, { entries: state.log, rows: LOG_ROWS, width: graphWidth })
+        showLog ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Log, { entries: state.log, rows: LOG_ROWS, width: graphWidth }) : null
       ] }),
       showStats ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Box_default, { marginLeft: 1, children: /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Stats, { state, limits, now, width: side }) }) : null
     ] }),
