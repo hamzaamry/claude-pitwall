@@ -25,7 +25,7 @@ function log(s: SessionState, time: string, who: string, text: string): void {
   // the transcripts, the subagent files and the events file are read one after another: keep time order
   let i = s.log.length;
   while (i > 0 && s.log[i - 1].time > time && time !== '') i--;
-  s.log.splice(i, 0, { time, who, text });
+  s.log.splice(i, 0, { time, who, text: oneLine(text) });
   if (s.log.length > LOG_CAP) s.log.splice(0, s.log.length - LOG_CAP);
 }
 

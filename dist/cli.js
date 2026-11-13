@@ -34610,7 +34610,7 @@ function agentFor(s, key) {
 function log(s, time, who, text) {
   let i = s.log.length;
   while (i > 0 && s.log[i - 1].time > time && time !== "") i--;
-  s.log.splice(i, 0, { time, who, text });
+  s.log.splice(i, 0, { time, who, text: oneLine(text) });
   if (s.log.length > LOG_CAP) s.log.splice(0, s.log.length - LOG_CAP);
 }
 var clip3 = (t, n) => t.length > n ? t.slice(0, n - 1) + "\u2026" : t;
