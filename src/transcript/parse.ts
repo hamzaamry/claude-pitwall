@@ -45,6 +45,9 @@ export function parseLine(raw: string): TranscriptEvent | null {
   const time: string = d.timestamp ?? '';
   const m: Raw | undefined = d.message;
 
+  // Claude Code names the conversation and renames it as it goes on; the latest line wins.
+  if (d.type === 'ai-title' && typeof d.aiTitle === 'string') return { kind: 'title', time, title: d.aiTitle };
+
   if (d.type === 'assistant' && m && m.usage) {
     const iterations: Raw[] | undefined = Array.isArray(m.usage.iterations) ? m.usage.iterations : undefined;
     const advisorIts = iterations?.filter((i) => i.type === ADVISOR_ITERATION) ?? [];
