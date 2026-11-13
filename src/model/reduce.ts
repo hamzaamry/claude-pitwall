@@ -101,18 +101,28 @@ function onToolUse(s: SessionState, key: string, time: string, b: Extract<Block,
 const VERDICT = /^(plan approved|approved|needs info|fix)\b/i;
 const firstLine = (t: string) => t.split('\n').map((l) => l.trim()).find(Boolean) ?? '';
 
+/** Claude Code puts a hand-back frame before a subagent's answer; the answer starts after its last line. */
+const HANDBACK = '[Subagent hand-back]';
+const REPORT_START = 'The report follows:';
+function answerOf(result: string): string {
+  const frame = result.indexOf(HANDBACK);
+  const start = frame === -1 ? -1 : result.indexOf(REPORT_START, frame);
+  return start === -1 ? result : result.slice(start + REPORT_START.length);
+}
+
 /** An Agent tool call came back: draw the answer travelling home, and count a reviewer answer as advice. */
 function onAgentResult(s: SessionState, e: Extract<TranscriptEvent, { kind: 'toolResult' }>): void {
   const spawn = s.spawns.get(e.toolUseId);
   if (!spawn) return;
   const card = Object.values(s.agents).find((a) => a.toolUseId === e.toolUseId);
+  const answer = answerOf(e.text);
   s.pendingFlows.push({ from: isReviewer(spawn.type) ? 'advisor' : card?.key ?? e.toolUseId, to: spawn.from, back: true, at: e.time,
-    label: oneLine(firstLine(e.text)).slice(0, 24), color: colorForRole(spawn.type) });
+    label: oneLine(firstLine(answer)).slice(0, 24), color: colorForRole(spawn.type) });
   if (!isReviewer(spawn.type) || e.isError) return;
-  const verdict = firstLine(e.text).match(VERDICT)?.[1].toLowerCase();
+  const verdict = firstLine(answer).match(VERDICT)?.[1].toLowerCase();
   const { askOpus, planCheck } = spawn;
   s.advisorCalls.push({ time: e.time, source: 'reviewer', why: askOpus ? 'ask-opus' : planCheck ? 'plan check' : 'final review',
-    result: askOpus ? undefined : verdict, text: oneLine(e.text), tokens: card?.tokens ?? 0, taskNo: s.taskNo, toolUseId: e.toolUseId });
+    result: askOpus ? undefined : verdict, text: oneLine(answer), tokens: card?.tokens ?? 0, taskNo: s.taskNo, toolUseId: e.toolUseId });
   if (askOpus) s.triggers.askOpus = 'done';
   else if (planCheck) s.triggers.planCheck = 'done';
   else s.triggers.finalReview = 'done';
