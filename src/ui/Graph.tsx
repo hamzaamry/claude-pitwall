@@ -135,7 +135,7 @@ const TRIGGERS: [string, keyof SessionState['triggers']][] = [
 ];
 const MARK: Record<string, { text: string; color: string }> = {
   todo: { text: '○', color: colors.dim }, on: { text: '●', color: colors.advisor },
-  done: { text: '✓', color: colors.done }, next: { text: 'next', color: colors.warning },
+  done: { text: '✓', color: colors.done }, skipped: { text: 'skip', color: colors.dim }, next: { text: 'next', color: colors.warning },
 };
 
 function drawAdvisor(g: Grid, b: Rect, state: SessionState): void {

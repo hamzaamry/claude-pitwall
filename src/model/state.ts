@@ -6,7 +6,7 @@ export type AgentInfo = { key: string; role: string; model: string; effort?: str
   toolUseId?: string; lastActivity?: string };
 export type AdvisorCall = { time: string; source: 'native' | 'reviewer'; why: string; result?: string; tokens: number; text?: string; taskNo: number; toolUseId?: string };
 export type Triggers = {
-  planCheck: 'todo' | 'done'; stuck: 'todo' | 'on' | 'done'; finalReview: 'todo' | 'next' | 'done'; askOpus: 'todo' | 'done';
+  planCheck: 'todo' | 'done' | 'skipped'; stuck: 'todo' | 'on' | 'done'; finalReview: 'todo' | 'next' | 'done'; askOpus: 'todo' | 'done';
 };
 export const freshTriggers = (): Triggers => ({ planCheck: 'todo', stuck: 'todo', finalReview: 'todo', askOpus: 'todo' });
 export type LogEntry = { time: string; who: string; text: string };
