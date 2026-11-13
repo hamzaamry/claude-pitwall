@@ -7,7 +7,8 @@ import { fileURLToPath } from 'node:url';
 
 const [session = '', cwd = process.cwd()] = process.argv.slice(2);
 const cli = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist', 'cli.js');
-const watch = ['node', cli, 'watch', '--cwd', cwd, ...(session ? ['--session', session] : [])];
+// The new window may not get this shell's PATH (nvm, fnm, volta), so name this node binary exactly.
+const watch = [process.execPath, cli, 'watch', '--cwd', cwd, ...(session ? ['--session', session] : [])];
 
 const has = (cmd) => spawnSync('sh', ['-c', `command -v ${cmd}`]).status === 0;
 
