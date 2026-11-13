@@ -35,12 +35,12 @@ function noHeredocs(command) {
   const kept = [];
   let closingWord;
   for (const line of command.split('\n')) {
-    if (closingWord) {
-      if (line.trim() === closingWord) closingWord = undefined;
-      continue;
+    if (!closingWord) {
+      kept.push(line);
+      closingWord = HEREDOC_START.exec(line)?.[2];
+    } else if (line.trim() === closingWord) {
+      closingWord = undefined;
     }
-    kept.push(line);
-    closingWord = HEREDOC_START.exec(line)?.[2];
   }
   return kept.join('\n');
 }
