@@ -18,7 +18,9 @@ const REVIEWER_SCOUT = `${FROM}the reviewer does not search. Send a pitwall:scou
 const RUNNER = `${FROM}main does not run tests, build or lint. Send the command to pitwall:runner.`;
 const NO_BASH_WRITES = `${FROM}write code with the Edit or Write tool, not through Bash.`;
 const ONE_REVIEW = `${FROM}the final review for this task is already done. Apply its points and finish; no second review.`;
-const NEEDS_PLAN = `${FROM}no approved plan yet. Send your plan to pitwall:reviewer with the first line PLAN-CHECK: (task, files, steps). Code after it answers "plan approved".`;
+const NEEDS_PLAN = `${FROM}no approved plan yet. Send your plan to pitwall:reviewer with the first line PLAN-CHECK: (task, files, steps). Code after it answers "plan approved". For a small task, send PLAN-CHECK: skip <reason> instead.`;
+const PLAN_SKIPPED = `${FROM}plan check skipped for a small task, no reviewer was started. Edit now; the final review still runs at the end.`;
+const PLAN_SKIP = /^PLAN-CHECK:\s*skip\b/i;
 
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'NotebookEdit']);
 const SEARCH_TOOLS = new Set(['Grep', 'Glob', 'WebSearch', 'WebFetch']);
@@ -93,6 +95,11 @@ function check(input) {
   if (SEARCH_TOOLS.has(tool)) return deny(sid, SCOUT, 'guard-search');
   if (tool === 'Read' && ti.offset === undefined && ti.pages === undefined && !NOT_TEXT.test(String(ti.file_path ?? ''))) return deny(sid, SCOUT, 'guard-search');
   if (tool === 'Agent' && !String(ti.subagent_type ?? '').startsWith('pitwall:')) return deny(sid, SCOUT, 'guard-search');
+  const toReviewer = (tool === 'Agent' && isReviewer(ti.subagent_type)) || (tool === 'SendMessage' && ti.to && ti.to === readState(sid).reviewerId);
+  if (toReviewer && PLAN_SKIP.test(String(ti.prompt ?? ti.message ?? '').trimStart())) {
+    writeState(sid, { ...readState(sid), planOk: true, finalReviewed: false });
+    return deny(sid, PLAN_SKIPPED, 'plan-skip');
+  }
   if (tool === 'Agent' && isReviewer(ti.subagent_type)) {
     const { reviewerId } = readState(sid);
     if (reviewerId) return deny(sid, continueReviewer(reviewerId), 'guard-reviewer');

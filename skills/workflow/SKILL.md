@@ -7,7 +7,7 @@ The pitwall team is on. You (main) are the executor: you plan, then you code. He
 For every task, in this order:
 1. **Search**: every question about the code or the web goes to `pitwall:scout` (Haiku). Launch several in parallel in ONE message, one focused question each. Not enough? Send more scouts; there is no cap. You never Grep, Glob, cat or read whole files yourself.
 2. **Evaluate**: Read only the slices the scouts pointed to, with `offset` and `limit`.
-3. **Plan**: send your plan to `pitwall:reviewer`, first line `PLAN-CHECK:`, then the task, the files and the steps. Short. Code only after it answers `plan approved`; on `fix`, adjust and send it again.
+3. **Plan**: send your plan to `pitwall:reviewer`, first line `PLAN-CHECK:`, then the task, the files and the steps. Short. Code only after it answers `plan approved`; on `fix`, adjust and send it again. Tiny task: send `PLAN-CHECK: skip <reason>` instead.
 4. **Code**: Edit and Write only, never through Bash. Every turn re-reads the whole conversation, so use few turns: put all the edits you already know in ONE message, write a new or mostly rewritten file with one Write, and don't edit one line per turn.
 5. **Tests, build, lint**: `pitwall:runner`, one command each. It returns only the failures.
 6. **Finish**: run `pitwall:reviewer` on the diff, once per task. Apply its points, then finish.

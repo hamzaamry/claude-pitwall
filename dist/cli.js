@@ -34195,6 +34195,7 @@ var MARK = {
   todo: { text: "\u25CB", color: colors.dim },
   on: { text: "\u25CF", color: colors.advisor },
   done: { text: "\u2713", color: colors.done },
+  skipped: { text: "skip", color: colors.dim },
   next: { text: "next", color: colors.warning }
 };
 function drawAdvisor(g, b, state) {
@@ -34628,9 +34629,15 @@ function registerSubagent(s, key, meta) {
   if (meta.toolUseId && s.failedToolUseIds.has(meta.toolUseId)) settle(s, a, "failed", time);
   else if (meta.finished) settle(s, a, "done", time);
 }
+var PLAN_SKIP = /^PLAN-CHECK:\s*skip\b\s*/i;
 function onToolUse(s, key, time, b) {
   const who = agentFor(s, key).role;
-  if (b.name === "Agent") {
+  const toReviewer = b.name === "Agent" ? isReviewer(String(b.input.subagent_type ?? "")) : b.name === "SendMessage" && isReviewer(s.agents[String(b.input.to ?? "")]?.role ?? "");
+  const text = String(b.input.prompt ?? b.input.message ?? "").trimStart();
+  if (toReviewer && PLAN_SKIP.test(text)) {
+    s.triggers.planCheck = "skipped";
+    log(s, time, who, `skipped the plan check: ${clip3(oneLine(text.replace(PLAN_SKIP, "")), 60) || "small task"}`);
+  } else if (b.name === "Agent") {
     const description = oneLine(String(b.input.description ?? ""));
     const type = String(b.input.subagent_type ?? "general-purpose");
     const shown = shortRole(type);

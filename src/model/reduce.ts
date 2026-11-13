@@ -53,9 +53,18 @@ export function registerSubagent(
   else if (meta.finished) settle(s, a, 'done', time);
 }
 
+/** `PLAN-CHECK: skip <reason>` to the reviewer: the guard hook answers it and no reviewer runs. */
+const PLAN_SKIP = /^PLAN-CHECK:\s*skip\b\s*/i;
+
 function onToolUse(s: SessionState, key: string, time: string, b: Extract<Block, { type: 'tool_use' }>): void {
   const who = agentFor(s, key).role;
-  if (b.name === 'Agent') {
+  const toReviewer = b.name === 'Agent' ? isReviewer(String(b.input.subagent_type ?? ''))
+    : b.name === 'SendMessage' && isReviewer(s.agents[String(b.input.to ?? '')]?.role ?? '');
+  const text = String(b.input.prompt ?? b.input.message ?? '').trimStart();
+  if (toReviewer && PLAN_SKIP.test(text)) {
+    s.triggers.planCheck = 'skipped';
+    log(s, time, who, `skipped the plan check: ${clip(oneLine(text.replace(PLAN_SKIP, '')), 60) || 'small task'}`);
+  } else if (b.name === 'Agent') {
     const description = oneLine(String(b.input.description ?? ''));
     const type = String(b.input.subagent_type ?? 'general-purpose');
     const shown = shortRole(type);
