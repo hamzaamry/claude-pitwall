@@ -135,7 +135,6 @@ export function applyEvent(s: SessionState, agentKey: string, e: TranscriptEvent
       s.taskNo += 1;
       s.triggers = freshTriggers();
       log(s, e.time, 'you', clip(e.text, 80));
-      s.categories = { coding: 0, reading: 0, talking: 0, planning: 0, tests: 0 };
     }
     return s;
   }
@@ -159,7 +158,7 @@ export function applyEvent(s: SessionState, agentKey: string, e: TranscriptEvent
   const total = e.usage.input + e.usage.output + e.usage.cacheRead + e.usage.cacheWrite;
   if (first) {
     s.seenMessageIds.add(e.messageId);
-    info = { tokens: total, blocks: [], category: 'talking', task: s.taskNo };
+    info = { tokens: total, blocks: [], category: 'talking' };
     s.msgInfo.set(e.messageId, info);
     agent.tokens += total;
     if (e.model) agent.model = modelAlias(e.model);
@@ -195,12 +194,10 @@ export function applyEvent(s: SessionState, agentKey: string, e: TranscriptEvent
 
   // The category follows all the blocks seen so far, so a later line can move the whole message.
   const category: Category = categorize(info!.blocks, agentKey === 'main' && s.hasEdited);
-  if (info!.task === s.taskNo) {
-    if (first) s.categories[category] += total;
-    else if (category !== info!.category) {
-      s.categories[info!.category] -= info!.tokens;
-      s.categories[category] += info!.tokens;
-    }
+  if (first) s.categories[category] += total;
+  else if (category !== info!.category) {
+    s.categories[info!.category] -= info!.tokens;
+    s.categories[category] += info!.tokens;
   }
   info!.category = category;
   return s;

@@ -148,13 +148,13 @@ describe('a message written on several lines (one line per content block)', () =
   });
 });
 
-describe('this-task token categories', () => {
-  it('reset when a new user prompt arrives', () => {
+describe('session token categories', () => {
+  it('keep adding up across user prompts', () => {
     const s = emptyState('s');
     applyEvent(s, 'main', asst({ blocks: [{ type: 'text', chars: 5 }] }));
     expect(s.categories.talking).toBe(115);
     applyEvent(s, 'main', { kind: 'userPrompt', time: 't', text: 'next task' });
-    expect(Object.values(s.categories).every((v) => v === 0)).toBe(true);
+    expect(s.categories.talking).toBe(115);
   });
 
   it('a late line of an old task does not push the new task negative', () => {
