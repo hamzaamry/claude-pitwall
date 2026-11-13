@@ -28,10 +28,26 @@ const isReviewer = (type) => /(^|:)reviewer$/.test(String(type ?? ''));
 const TEST = /\b(test|vitest|jest|pytest|tsc|lint|eslint|build|cargo check|go vet)\b/;
 const LOOK = /^(ls|cat|head|tail|grep|egrep|rg|find|tree|wc|stat|file|less|awk|sed -n|bat)\b/;
 const unquoted = (c) => c.replace(/'[^']*'|"(\\.|[^"\\])*"/g, "''");
+const HEREDOC_START = /<<-?\s*(['"]?)(\w+)\1/;
+
+/** A heredoc body is text, not shell: keep the line with the << marker, drop the body up to the closing word. */
+function noHeredocs(command) {
+  const kept = [];
+  let closingWord;
+  for (const line of command.split('\n')) {
+    if (!closingWord) {
+      kept.push(line);
+      closingWord = HEREDOC_START.exec(line)?.[2];
+    } else if (line.trim() === closingWord) {
+      closingWord = undefined;
+    }
+  }
+  return kept.join('\n');
+}
 const stripCd = (c) => c.trim().replace(/^cd\s+[^;&|]+(&&|;)\s*/, '');
 
 export function bashKind(command) {
-  const c = stripCd(String(command ?? ''));
+  const c = noHeredocs(stripCd(String(command ?? '')));
   const bare = unquoted(c);
   if (/\b(python3?|node|ruby|perl)\s+-\s*<</.test(bare) || /\bsed\s+-i\b|\bperl\s+-[a-z]*i\b|\btee\b/.test(bare)) return 'write';
   if (/(^|[^0-9&>])>>?\s*(?!&|\/dev\/null)[^\s|&;]/.test(bare)) return 'write';
