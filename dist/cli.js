@@ -34856,6 +34856,15 @@ function subagentFiles(projectDir, sessionId) {
     metaFile: join3(dir, n.replace(/\.jsonl$/, ".meta.json"))
   }));
 }
+function findSessionDir(sessionId, home = homedir3()) {
+  const base = join3(home, ".claude", "projects");
+  try {
+    const hit = readdirSync(base).find((n) => existsSync3(join3(base, n, `${sessionId}.jsonl`)));
+    return hit ? join3(base, hit) : void 0;
+  } catch {
+    return void 0;
+  }
+}
 
 // src/transcript/parse.ts
 var ADVISOR_ITERATION = "advisor_message";
@@ -34987,6 +34996,7 @@ var QUIET_MS = 3e4;
 var LIVE_FLOW_MS = 1e4;
 var SessionWatcher = class {
   projectDir;
+  home;
   pinned;
   pitwallDir;
   current;
@@ -34994,6 +35004,7 @@ var SessionWatcher = class {
   ctxs = /* @__PURE__ */ new Map();
   constructor(opts) {
     this.projectDir = projectDirFor(opts.cwd, opts.home);
+    this.home = opts.home;
     this.pitwallDir = opts.pitwallHome ?? process.env.PITWALL_HOME ?? join4(opts.home ?? homedir4(), ".claude", "pitwall");
     this.pinned = opts.sessionId;
   }
@@ -35011,7 +35022,14 @@ var SessionWatcher = class {
     return cur;
   }
   poll() {
-    const list = listSessions(this.projectDir);
+    let list = listSessions(this.projectDir);
+    if (this.pinned && !list.some((x) => x.id === this.pinned)) {
+      const dir = findSessionDir(this.pinned, this.home);
+      if (dir && dir !== this.projectDir) {
+        this.projectDir = dir;
+        list = listSessions(dir);
+      }
+    }
     const target = this.choose(list);
     for (const x of list) this.known.add(x.id);
     if (!target) return this.current ? this.ctxs.get(this.current).state : null;

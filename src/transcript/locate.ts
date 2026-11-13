@@ -47,3 +47,12 @@ export function subagentFiles(projectDir: string, sessionId: string): { key: str
       metaFile: join(dir, n.replace(/\.jsonl$/, '.meta.json')),
     }));
 }
+
+/** The project folder holding this session's transcript, in any project: the shell may have left the session's folder. */
+export function findSessionDir(sessionId: string, home: string = homedir()): string | undefined {
+  const base = join(home, '.claude', 'projects');
+  try {
+    const hit = readdirSync(base).find((n) => existsSync(join(base, n, `${sessionId}.jsonl`)));
+    return hit ? join(base, hit) : undefined;
+  } catch { return undefined; }
+}

@@ -5,7 +5,7 @@ import { applyPitwallEvent, parseEvent } from './events.js';
 import { isTeamOn, teamKey } from './team.js';
 import { applyEvent, registerSubagent } from './model/reduce.js';
 import { emptyState, type SessionState } from './model/state.js';
-import { listSessions, projectDirFor, subagentFiles, type SessionFile } from './transcript/locate.js';
+import { findSessionDir, listSessions, projectDirFor, subagentFiles, type SessionFile } from './transcript/locate.js';
 import { parseLine } from './transcript/parse.js';
 import { FileTail } from './transcript/tail.js';
 
@@ -22,6 +22,7 @@ type Ctx = {
 
 export class SessionWatcher {
   private projectDir: string;
+  private home?: string;
   private pinned?: string;
   private pitwallDir: string;
   private current?: string;
@@ -30,6 +31,7 @@ export class SessionWatcher {
 
   constructor(opts: { cwd: string; home?: string; sessionId?: string; pitwallHome?: string }) {
     this.projectDir = projectDirFor(opts.cwd, opts.home);
+    this.home = opts.home;
     this.pitwallDir = opts.pitwallHome ?? process.env.PITWALL_HOME ?? join(opts.home ?? homedir(), '.claude', 'pitwall');
     this.pinned = opts.sessionId;
   }
@@ -48,7 +50,11 @@ export class SessionWatcher {
   }
 
   poll(): SessionState | null {
-    const list = listSessions(this.projectDir);
+    let list = listSessions(this.projectDir);
+    if (this.pinned && !list.some((x) => x.id === this.pinned)) {
+      const dir = findSessionDir(this.pinned, this.home);
+      if (dir && dir !== this.projectDir) { this.projectDir = dir; list = listSessions(dir); }
+    }
     const target = this.choose(list);
     for (const x of list) this.known.add(x.id);
     if (!target) return this.current ? this.ctxs.get(this.current)!.state : null;
