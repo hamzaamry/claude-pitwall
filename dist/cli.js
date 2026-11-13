@@ -34539,7 +34539,7 @@ function Stats({ state, limits, now, width = STATS_WIDTH }) {
         wrap(last.source === "reviewer" && last.text ? last.text : "\u{1F512} native advice (encrypted)", inner, 5).map((l, i) => /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: colors.bright, children: l }, i))
       ] })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Section, { width, title: "WHERE TOKENS WENT \xB7 this task", children: CATEGORIES.map((c) => /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Section, { width, title: "WHERE TOKENS WENT \xB7 this session", children: CATEGORIES.map((c) => /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { children: [
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { children: width < 38 ? LABEL[c].slice(0, 8).padEnd(9) : LABEL[c].padEnd(14) }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Text, { color: c === "coding" ? colors.done : colors.muted, children: bar2(pct[c]) }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(Text, { children: [
@@ -34717,7 +34717,6 @@ function applyEvent(s, agentKey, e) {
       s.taskNo += 1;
       s.triggers = freshTriggers();
       log(s, e.time, "you", clip3(e.text, 80));
-      s.categories = { coding: 0, reading: 0, talking: 0, planning: 0, tests: 0 };
     }
     return s;
   }
@@ -34735,7 +34734,7 @@ function applyEvent(s, agentKey, e) {
   const total = e.usage.input + e.usage.output + e.usage.cacheRead + e.usage.cacheWrite;
   if (first) {
     s.seenMessageIds.add(e.messageId);
-    info = { tokens: total, blocks: [], category: "talking", task: s.taskNo };
+    info = { tokens: total, blocks: [], category: "talking" };
     s.msgInfo.set(e.messageId, info);
     agent.tokens += total;
     if (e.model) agent.model = modelAlias(e.model);
@@ -34768,12 +34767,10 @@ function applyEvent(s, agentKey, e) {
     }
   }
   const category = categorize(info.blocks, agentKey === "main" && s.hasEdited);
-  if (info.task === s.taskNo) {
-    if (first) s.categories[category] += total;
-    else if (category !== info.category) {
-      s.categories[info.category] -= info.tokens;
-      s.categories[category] += info.tokens;
-    }
+  if (first) s.categories[category] += total;
+  else if (category !== info.category) {
+    s.categories[info.category] -= info.tokens;
+    s.categories[category] += info.tokens;
   }
   info.category = category;
   return s;

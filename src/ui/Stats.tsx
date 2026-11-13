@@ -119,7 +119,7 @@ export function Stats({ state, limits, now, width = STATS_WIDTH }: { state: Sess
           </>
         )}
       </Section>
-      <Section width={width} title="WHERE TOKENS WENT · this task">
+      <Section width={width} title="WHERE TOKENS WENT · this session">
         {CATEGORIES.map((c) => (
           <Text key={c}>
             <Text>{(width < 38 ? LABEL[c].slice(0, 8).padEnd(9) : LABEL[c].padEnd(14))}</Text>
