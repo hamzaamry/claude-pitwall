@@ -35056,7 +35056,24 @@ var SessionWatcher = class {
     if (newest.id !== cur.id && Date.now() - cur.mtime > QUIET_MS) return newest;
     return cur;
   }
+  /** After /clear the pinned session hands over to the new one: hooks/clear-link.mjs writes next/<old id>. */
+  followClear() {
+    const seen = /* @__PURE__ */ new Set();
+    while (this.pinned && !seen.has(this.pinned)) {
+      seen.add(this.pinned);
+      let next;
+      try {
+        next = readFileSync3(join4(this.pitwallDir, "next", this.pinned), "utf8").trim();
+      } catch {
+        return;
+      }
+      if (!next) return;
+      this.pinned = next;
+      this.current = void 0;
+    }
+  }
   poll() {
+    this.followClear();
     let list = listSessions(this.projectDir);
     if (this.pinned && !list.some((x) => x.id === this.pinned)) {
       const dir = findSessionDir(this.pinned, this.home);
@@ -35067,7 +35084,10 @@ var SessionWatcher = class {
     }
     const target = this.choose(list);
     for (const x of list) this.known.add(x.id);
-    if (!target) return this.current ? this.ctxs.get(this.current).state : null;
+    if (!target) {
+      if (this.current) return this.ctxs.get(this.current).state;
+      return this.pinned && this.ctxs.size > 0 ? emptyState(this.pinned) : null;
+    }
     this.current = target.id;
     let ctx = this.ctxs.get(target.id);
     if (!ctx) {

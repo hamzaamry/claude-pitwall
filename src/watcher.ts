@@ -49,7 +49,21 @@ export class SessionWatcher {
     return cur;
   }
 
+  /** After /clear the pinned session hands over to the new one: hooks/clear-link.mjs writes next/<old id>. */
+  private followClear(): void {
+    const seen = new Set<string>();
+    while (this.pinned && !seen.has(this.pinned)) {
+      seen.add(this.pinned);
+      let next: string;
+      try { next = readFileSync(join(this.pitwallDir, 'next', this.pinned), 'utf8').trim(); } catch { return; }
+      if (!next) return;
+      this.pinned = next;
+      this.current = undefined;
+    }
+  }
+
   poll(): SessionState | null {
+    this.followClear();
     let list = listSessions(this.projectDir);
     if (this.pinned && !list.some((x) => x.id === this.pinned)) {
       const dir = findSessionDir(this.pinned, this.home);
@@ -57,7 +71,11 @@ export class SessionWatcher {
     }
     const target = this.choose(list);
     for (const x of list) this.known.add(x.id);
-    if (!target) return this.current ? this.ctxs.get(this.current)!.state : null;
+    if (!target) {
+      if (this.current) return this.ctxs.get(this.current)!.state;
+      // a session cleared into has no transcript until its first prompt: show it empty
+      return this.pinned && this.ctxs.size > 0 ? emptyState(this.pinned) : null;
+    }
 
     this.current = target.id;
     let ctx = this.ctxs.get(target.id);
