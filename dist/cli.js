@@ -34563,6 +34563,24 @@ function Stats({ state, limits, now, width = STATS_WIDTH }) {
   ] });
 }
 
+// src/ui/terminalTitle.ts
+var ESC2 = "\x1B";
+var BEL2 = "\x07";
+var CONTROL_CHARS = /[\x00-\x1f\x7f]/g;
+function dashboardTitle(conversation) {
+  const name = (conversation ?? "").replace(CONTROL_CHARS, "").trim();
+  return name ? `pitwall \xB7 ${name}` : "pitwall";
+}
+function setTitle(out, title) {
+  if (out.isTTY) out.write(`${ESC2}]0;${title}${BEL2}`);
+}
+function saveTitle(out) {
+  if (out.isTTY) out.write(`${ESC2}[22;0t`);
+}
+function restoreTitle(out) {
+  if (out.isTTY) out.write(`${ESC2}[23;0t`);
+}
+
 // src/watcher.ts
 import { existsSync as existsSync4, readFileSync as readFileSync3 } from "node:fs";
 import { homedir as homedir4 } from "node:os";
@@ -34725,6 +34743,10 @@ function applyEvent(s, agentKey, e) {
   }
   const agent = agentFor(s, agentKey);
   if (e.time) agent.lastActivity = e.time;
+  if (e.kind === "title") {
+    if (agentKey === "main") s.title = e.title;
+    return s;
+  }
   if (e.kind === "userPrompt") {
     if (agentKey === "main") {
       s.currentTask = e.text.length > 60 ? e.text.slice(0, 60) + "\u2026" : e.text;
@@ -34926,6 +34948,7 @@ function parseLine(raw) {
   if (!d || typeof d !== "object") return null;
   const time = d.timestamp ?? "";
   const m = d.message;
+  if (d.type === "ai-title" && typeof d.aiTitle === "string") return { kind: "title", time, title: d.aiTitle };
   if (d.type === "assistant" && m && m.usage) {
     const iterations = Array.isArray(m.usage.iterations) ? m.usage.iterations : void 0;
     const advisorIts = iterations?.filter((i) => i.type === ADVISOR_ITERATION) ?? [];
@@ -35116,6 +35139,12 @@ function useTermSize(width, height) {
   }, [stdout, width]);
   return width !== void 0 ? read() : size;
 }
+function useWindowTitle(conversation) {
+  const { stdout } = use_stdout_default();
+  (0, import_react23.useEffect)(() => {
+    if (stdout) setTitle(stdout, dashboardTitle(conversation));
+  }, [stdout, conversation]);
+}
 function App2({ cwd: cwd2, home, sessionId, width, height, pollMs = 500, tickMs = 120 }) {
   const watcher = (0, import_react23.useMemo)(() => new SessionWatcher({ cwd: cwd2, home, sessionId }), [cwd2, home, sessionId]);
   const { exit } = use_app_default();
@@ -35142,6 +35171,7 @@ function App2({ cwd: cwd2, home, sessionId, width, height, pollMs = 500, tickMs 
   use_input_default((input) => {
     if (input === "q") exit();
   }, { isActive: Boolean(process.stdin.isTTY) });
+  useWindowTitle(state?.title);
   if (!state) {
     return /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(Text, { color: colors.dim, children: [
       "waiting for a Claude Code session in ",
@@ -35184,7 +35214,9 @@ if (command !== "watch") {
   console.log("usage: pitwall watch [--cwd <dir>] [--session <id>]   (press q to quit)");
   process.exit(command === void 0 || command === "--help" ? 0 : 1);
 }
-render_default(import_react24.default.createElement(App2, { cwd: resolve(arg("--cwd") ?? process.cwd()), sessionId: arg("--session") }));
+saveTitle(process.stdout);
+var app = render_default(import_react24.default.createElement(App2, { cwd: resolve(arg("--cwd") ?? process.cwd()), sessionId: arg("--session") }));
+app.waitUntilExit().finally(() => restoreTitle(process.stdout));
 /*! Bundled license information:
 
 react/cjs/react.production.min.js:

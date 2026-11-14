@@ -5,6 +5,7 @@ import { Graph } from './ui/Graph.js';
 import { Header, headerHeight } from './ui/Header.js';
 import { Log, logHeight } from './ui/Log.js';
 import { STATS_WIDTH, Stats } from './ui/Stats.js';
+import { dashboardTitle, setTitle } from './ui/terminalTitle.js';
 import { colors } from './ui/theme.js';
 import { SessionWatcher } from './watcher.js';
 
@@ -25,6 +26,14 @@ function useTermSize(width?: number, height?: number): { width: number; height: 
     return () => { stdout.off('resize', onResize); };
   }, [stdout, width]);
   return width !== undefined ? read() : size;
+}
+
+/** The window is named after the Claude conversation it watches. */
+function useWindowTitle(conversation?: string): void {
+  const { stdout } = useStdout();
+  useEffect(() => {
+    if (stdout) setTitle(stdout, dashboardTitle(conversation));
+  }, [stdout, conversation]);
 }
 
 export function App({ cwd, home, sessionId, width, height, pollMs = 500, tickMs = 120 }: {
@@ -48,6 +57,7 @@ export function App({ cwd, home, sessionId, width, height, pollMs = 500, tickMs 
   }, [watcher, pollMs]);
 
   useInput((input) => { if (input === 'q') exit(); }, { isActive: Boolean(process.stdin.isTTY) });
+  useWindowTitle(state?.title);
 
   if (!state) {
     return <Text color={colors.dim}>waiting for a Claude Code session in {watcher.dir}</Text>;

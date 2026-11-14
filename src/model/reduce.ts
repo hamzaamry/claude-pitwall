@@ -147,6 +147,11 @@ export function applyEvent(s: SessionState, agentKey: string, e: TranscriptEvent
   const agent = agentFor(s, agentKey);
   if (e.time) agent.lastActivity = e.time;
 
+  if (e.kind === 'title') {
+    if (agentKey === 'main') s.title = e.title;
+    return s;
+  }
+
   if (e.kind === 'userPrompt') {
     if (agentKey === 'main') {
       s.currentTask = e.text.length > 60 ? e.text.slice(0, 60) + '…' : e.text;

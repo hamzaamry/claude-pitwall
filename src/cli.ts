@@ -2,6 +2,7 @@ import React from 'react';
 import { resolve } from 'node:path';
 import { render } from 'ink';
 import { App } from './App.js';
+import { restoreTitle, saveTitle } from './ui/terminalTitle.js';
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(name);
@@ -14,4 +15,6 @@ if (command !== 'watch') {
   process.exit(command === undefined || command === '--help' ? 0 : 1);
 }
 
-render(React.createElement(App, { cwd: resolve(arg('--cwd') ?? process.cwd()), sessionId: arg('--session') }));
+saveTitle(process.stdout);
+const app = render(React.createElement(App, { cwd: resolve(arg('--cwd') ?? process.cwd()), sessionId: arg('--session') }));
+app.waitUntilExit().finally(() => restoreTitle(process.stdout));

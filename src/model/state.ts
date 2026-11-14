@@ -12,7 +12,7 @@ export const freshTriggers = (): Triggers => ({ planCheck: 'todo', stuck: 'todo'
 export type LogEntry = { time: string; who: string; text: string };
 export type Flow = { from: string; to: string; label: string; color: string; tries?: number; at?: string; back?: boolean };
 export type SessionState = {
-  sessionId: string; currentTask: string; startedAt?: string; lastActivity?: string;
+  sessionId: string; title?: string; currentTask: string; startedAt?: string; lastActivity?: string;
   agents: Record<string, AgentInfo>;      // key 'main' + one per subagent id
   seenMessageIds: Set<string>;
   skills: { name: string; by: string; firstAt: string; lastAt: string }[];

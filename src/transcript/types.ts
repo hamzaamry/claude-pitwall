@@ -8,4 +8,5 @@ export type TranscriptEvent =
   | { kind: 'assistant'; time: string; messageId: string; model: string; effort?: string; advisorModel?: string;
       usage: Usage; advisorUsage?: Usage; blocks: Block[] }
   | { kind: 'userPrompt'; time: string; text: string }
-  | { kind: 'toolResult'; time: string; toolUseId: string; isError: boolean; text: string };
+  | { kind: 'toolResult'; time: string; toolUseId: string; isError: boolean; text: string }
+  | { kind: 'title'; time: string; title: string };
