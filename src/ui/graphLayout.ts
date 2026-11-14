@@ -2,7 +2,7 @@ import type { AgentInfo } from '../model/state.js';
 import { isReviewer } from '../role.js';
 
 export type GraphLayout = {
-  boxes: { key: string; x: number; y: number; w: number; h: number; runs?: number }[];
+  boxes: { key: string; x: number; y: number; w: number; h: number; runs?: number; tokens?: number }[];
   // aliases: the other runs merged into this card (their keys and tool_use ids), so their dots use this wire
   wires: { from: string; to: string; cells: [number, number][]; toolUseId?: string; aliases?: string[] }[];
 };
@@ -12,6 +12,7 @@ export const CARD_H = 6;
 const ADVISOR_W = 24;
 const MAIN_W = 30;
 const CARD_W = 22;
+export const FOLD_AFTER_MS = 5_000;
 
 const isFinished = (a: AgentInfo) => a.status === 'done' || a.status === 'failed';
 
@@ -24,7 +25,7 @@ function pickCards(subs: AgentInfo[], fit: number): AgentInfo[] {
   return [...live, ...finished].slice(0, fit).sort((p, q) => p.i - q.i).map((r) => r.a);
 }
 
-export function layoutGraph(agents: AgentInfo[], width: number, height: number): GraphLayout {
+export function layoutGraph(agents: AgentInfo[], width: number, height: number, nowMs: number = Date.now(), taskNo?: number): GraphLayout {
   // wide enough to read its labels whenever the graph is a normal size
   const advW = Math.min(ADVISOR_W, Math.max(width >= 60 ? 20 : 8, Math.floor(width / 4)));
   const advH = Math.max(MAIN_H, height);
@@ -46,20 +47,19 @@ export function layoutGraph(agents: AgentInfo[], width: number, height: number):
   for (let x = advW; x < mainX; x++) advCells.push([x, midY]);
   if (advCells.length) wires.push({ from: 'main', to: 'advisor', cells: advCells });
 
-  // the reviewer is drawn as the advisor panel, not as a card of its own
-  // The same job run again (same role, same task) reuses its card: the live run, else the latest one.
-  const groups = new Map<string, AgentInfo[]>();
-  for (const a of agents) {
-    if (a.key === 'main' || isReviewer(a.role)) continue;
-    const id = `${a.role}|${a.title}`;
-    groups.set(id, [...(groups.get(id) ?? []), a]);
-  }
+  // The reviewer is drawn as the advisor panel, not as a card of its own.
+  // Live agents and the just finished (so their ✓ shows) get their own card; older finished runs fold into one card per role.
+  const helpers = agents.filter((a) => a.key !== 'main' && !isReviewer(a.role));
+  const folds = (a: AgentInfo) => isFinished(a) && !(nowMs - Date.parse(a.finishedAt ?? '') < FOLD_AFTER_MS);
+  const folded = new Map<string, AgentInfo[]>();
+  for (const a of helpers) if (folds(a)) folded.set(a.role, [...(folded.get(a.role) ?? []), a]);
   const runsOf = new Map<string, AgentInfo[]>();
-  const subs = [...groups.values()].map((runs) => {
-    const shown = [...runs].reverse().find((r) => !isFinished(r)) ?? runs[runs.length - 1];
-    runsOf.set(shown.key, runs);
-    return shown;
-  });
+  for (const [role, runs] of folded) {
+    const hidden = taskNo !== undefined && !runs.some((r) => r.taskNo === taskNo)
+      && !helpers.some((a) => a.role === role && !isFinished(a));
+    if (!hidden) runsOf.set(runs[runs.length - 1].key, runs);
+  }
+  const subs = helpers.filter((a) => !folds(a) || runsOf.has(a.key));
   const cardW = Math.min(CARD_W, areaW);
   const fit = Math.max(1, Math.floor((areaW + 1) / (cardW + 1)));
   const shown = pickCards(subs, fit);
@@ -71,7 +71,8 @@ export function layoutGraph(agents: AgentInfo[], width: number, height: number):
   shown.forEach((a, i) => {
     const x = rowX + i * (cardW + 1);
     const runs = runsOf.get(a.key) ?? [a];
-    boxes.push({ key: a.key, x, y: cardY, w: cardW, h: CARD_H, ...(runs.length > 1 ? { runs: runs.length } : {}) });
+    const fold = runsOf.has(a.key) ? { runs: runs.length, tokens: runs.reduce((n, r) => n + r.tokens, 0) } : {};
+    boxes.push({ key: a.key, x, y: cardY, w: cardW, h: CARD_H, ...fold });
     const aliases = runs.filter((r) => r !== a).flatMap((r) => [r.key, ...(r.toolUseId ? [r.toolUseId] : [])]);
     const cx = x + Math.floor(cardW / 2);
     const cells: [number, number][] = [];

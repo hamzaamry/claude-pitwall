@@ -1,10 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { layoutGraph } from '../../src/ui/graphLayout.js';
+import { FOLD_AFTER_MS, layoutGraph } from '../../src/ui/graphLayout.js';
 import type { AgentInfo } from '../../src/model/state.js';
 
 const agent = (key: string, status: AgentInfo['status'] = 'working', toolUseId?: string): AgentInfo =>
   ({ key, role: 'Explore', model: 'opus', title: key, tokens: 0, status, toolUseId });
 const main = (): AgentInfo => ({ key: 'main', role: 'main', model: 'sonnet', title: '', tokens: 0, status: 'working' });
+const NOW = Date.parse('2026-11-14T10:00:10Z');
+const ago = (ms: number) => new Date(NOW - ms).toISOString();
+const run = (key: string, over: Partial<AgentInfo> = {}): AgentInfo =>
+  ({ key, role: 'runner', model: 'haiku', title: 'npm test', tokens: 0, status: 'working', ...over });
+const subCards = (l: ReturnType<typeof layoutGraph>) => l.boxes.filter((b) => b.key !== 'main' && b.key !== 'advisor');
 type Box = { x: number; y: number; w: number; h: number };
 const overlap = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
@@ -74,6 +79,46 @@ describe('layoutGraph', () => {
   it('keeps the advisor panel wide enough to read in a medium graph', () => {
     const l = layoutGraph([main()], 62, 30);
     expect(l.boxes.find((b) => b.key === 'advisor')!.w).toBeGreaterThanOrEqual(20);
+  });
+
+  it('two live agents of the same role get two cards', () => {
+    const cards = subCards(layoutGraph([main(), run('r1'), run('r2')], 160, 30, NOW));
+    expect(cards.map((c) => c.key)).toEqual(['r1', 'r2']);
+    for (const c of cards) expect(c.runs).toBeUndefined();
+  });
+
+  it('a finished agent keeps its card for 5 s', () => {
+    const cards = subCards(layoutGraph([main(), run('r1', { status: 'done', finishedAt: ago(FOLD_AFTER_MS - 3000) })], 160, 30, NOW));
+    expect(cards).toHaveLength(1);
+    expect(cards[0].runs).toBeUndefined();
+  });
+
+  it('finished agents of one role fold into one card after 5 s', () => {
+    const old = { status: 'done' as const, finishedAt: ago(FOLD_AFTER_MS + 1000) };
+    const l = layoutGraph([main(), run('r1', { ...old, tokens: 10 }), run('r2', { ...old, tokens: 20, toolUseId: 'toolu_2' }),
+      run('r3', { ...old, tokens: 30 })], 160, 30, NOW);
+    const cards = subCards(l);
+    expect(cards).toHaveLength(1);
+    expect(cards[0]).toMatchObject({ key: 'r3', runs: 3, tokens: 60 });
+    expect(l.wires.find((w) => w.to === 'r3')?.aliases).toEqual(expect.arrayContaining(['r1', 'r2', 'toolu_2']));
+  });
+
+  it('live runner next to the folded runners', () => {
+    const old = { status: 'done' as const, finishedAt: ago(FOLD_AFTER_MS + 1000) };
+    const cards = subCards(layoutGraph([main(), run('r1', old), run('r2', old), run('r3')], 160, 30, NOW));
+    expect(cards.map((c) => [c.key, c.runs])).toEqual([['r2', 2], ['r3', undefined]]);
+  });
+
+  it('a role from an earlier task disappears', () => {
+    const old = { role: 'scout', status: 'done' as const, finishedAt: ago(60_000), taskNo: 1 };
+    const agents = [main(), run('s1', old), run('s2', old)];
+    expect(subCards(layoutGraph(agents, 160, 30, NOW, 2))).toEqual([]);
+    expect(subCards(layoutGraph(agents, 160, 30, NOW))).toHaveLength(1);
+  });
+
+  it('done with no finishedAt folds at once', () => {
+    const cards = subCards(layoutGraph([main(), run('r1', { status: 'done' })], 160, 30, NOW));
+    expect(cards[0]).toMatchObject({ key: 'r1', runs: 1 });
   });
 
   it('does not crash on a tiny terminal', () => {
