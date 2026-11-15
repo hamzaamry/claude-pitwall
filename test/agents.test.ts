@@ -36,7 +36,7 @@ describe('agent files', () => {
     const { meta } = agent('reviewer');
     expect(meta).toMatchObject({ model: 'opus', effort: 'medium', maxTurns: '20' });
     const tools = toolList(meta);
-    expect(tools).toEqual(['Read', 'Bash', 'Agent']);
+    expect(tools).toEqual(['Read', 'Bash', 'Agent', 'Skill']);
     expect(tools).not.toContain('Edit');
     expect(tools).not.toContain('Write');
   });
