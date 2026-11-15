@@ -1399,7 +1399,7 @@ var require_react_development = __commonJS({
           var dispatcher = resolveDispatcher();
           return dispatcher.useCallback(callback, deps);
         }
-        function useMemo5(create2, deps) {
+        function useMemo4(create2, deps) {
           var dispatcher = resolveDispatcher();
           return dispatcher.useMemo(create2, deps);
         }
@@ -2171,7 +2171,7 @@ var require_react_development = __commonJS({
         exports.useImperativeHandle = useImperativeHandle;
         exports.useInsertionEffect = useInsertionEffect;
         exports.useLayoutEffect = useLayoutEffect2;
-        exports.useMemo = useMemo5;
+        exports.useMemo = useMemo4;
         exports.useReducer = useReducer;
         exports.useRef = useRef2;
         exports.useState = useState4;
@@ -33979,6 +33979,7 @@ var CARD_H = 6;
 var ADVISOR_W = 24;
 var MAIN_W = 30;
 var CARD_W = 22;
+var FOLD_AFTER_MS = 5e3;
 var isFinished = (a) => a.status === "done" || a.status === "failed";
 function pickCards(subs, fit) {
   if (subs.length <= fit) return subs;
@@ -33987,7 +33988,7 @@ function pickCards(subs, fit) {
   const finished = ranked.filter((r) => isFinished(r.a)).reverse();
   return [...live, ...finished].slice(0, fit).sort((p, q) => p.i - q.i).map((r) => r.a);
 }
-function layoutGraph(agents, width, height) {
+function layoutGraph(agents, width, height, nowMs = Date.now(), taskNo) {
   const advW = Math.min(ADVISOR_W, Math.max(width >= 60 ? 20 : 8, Math.floor(width / 4)));
   const advH = Math.max(MAIN_H, height);
   const areaX = advW + 2;
@@ -34005,18 +34006,16 @@ function layoutGraph(agents, width, height) {
   const midY = Math.floor(MAIN_H / 2);
   for (let x = advW; x < mainX; x++) advCells.push([x, midY]);
   if (advCells.length) wires.push({ from: "main", to: "advisor", cells: advCells });
-  const groups = /* @__PURE__ */ new Map();
-  for (const a of agents) {
-    if (a.key === "main" || isReviewer(a.role)) continue;
-    const id = `${a.role}|${a.title}`;
-    groups.set(id, [...groups.get(id) ?? [], a]);
-  }
+  const helpers = agents.filter((a) => a.key !== "main" && !isReviewer(a.role));
+  const folds = (a) => isFinished(a) && !(nowMs - Date.parse(a.finishedAt ?? "") < FOLD_AFTER_MS);
+  const folded = /* @__PURE__ */ new Map();
+  for (const a of helpers) if (folds(a)) folded.set(a.role, [...folded.get(a.role) ?? [], a]);
   const runsOf = /* @__PURE__ */ new Map();
-  const subs = [...groups.values()].map((runs) => {
-    const shown2 = [...runs].reverse().find((r) => !isFinished(r)) ?? runs[runs.length - 1];
-    runsOf.set(shown2.key, runs);
-    return shown2;
-  });
+  for (const [role, runs] of folded) {
+    const hidden = taskNo !== void 0 && !runs.some((r) => r.taskNo === void 0 || r.taskNo === taskNo) && !helpers.some((a) => a.role === role && !isFinished(a));
+    if (!hidden) runsOf.set(runs[runs.length - 1].key, runs);
+  }
+  const subs = helpers.filter((a) => !folds(a) || runsOf.has(a.key));
   const cardW = Math.min(CARD_W, areaW);
   const fit = Math.max(1, Math.floor((areaW + 1) / (cardW + 1)));
   const shown = pickCards(subs, fit);
@@ -34027,7 +34026,8 @@ function layoutGraph(agents, width, height) {
   shown.forEach((a, i) => {
     const x = rowX + i * (cardW + 1);
     const runs = runsOf.get(a.key) ?? [a];
-    boxes.push({ key: a.key, x, y: cardY, w: cardW, h: CARD_H, ...runs.length > 1 ? { runs: runs.length } : {} });
+    const fold = runsOf.has(a.key) ? { runs: runs.length, tokens: runs.reduce((n, r) => n + r.tokens, 0) } : {};
+    boxes.push({ key: a.key, x, y: cardY, w: cardW, h: CARD_H, ...fold });
     const aliases = runs.filter((r) => r !== a).flatMap((r) => [r.key, ...r.toolUseId ? [r.toolUseId] : []]);
     const cx = x + Math.floor(cardW / 2);
     const cells = [];
@@ -34234,14 +34234,15 @@ function drawMain(g, b, state, frame) {
   const used = putEffort(g, b.x + 9, b.y + 3, a0?.effort, colors.main, inner - 7);
   if (!used) put(g, b.x + 9, b.y + 3, clip("unknown", inner - 7), colors.dim);
 }
-function drawCard(g, b, a0, frame, runs = 1) {
+function drawCard(g, b, a0, frame, runs = 1, tokens) {
   const a = { ...a0, status: statusAt(a0, Date.now()) };
   const color = colorForRole(a.role);
   const inner = b.w - 4;
   box(g, b, a.status === "working" ? color : a.status === "failed" ? colors.failed : colors.border);
-  const times = runs > 1 ? ` \xD7${runs}` : "";
-  put(g, b.x + 2, b.y + 1, clip(a.title || a.role, inner - times.length) + times, a.status === "idle" || a.status === "done" ? colors.muted : color);
-  put(g, b.x + 2, b.y + 2, clip([a.role, a.model].filter(Boolean).join(" \xB7 "), inner), colors.dim);
+  const folded = tokens !== void 0;
+  const times = folded ? ` \xD7${runs}` : "";
+  put(g, b.x + 2, b.y + 1, clip(folded ? shortRole(a.role) : a.title || a.role, inner - times.length) + times, a.status === "idle" || a.status === "done" ? colors.muted : color);
+  put(g, b.x + 2, b.y + 2, clip(folded ? `${fmtTokens(tokens)} tokens` : [a.role, a.model].filter(Boolean).join(" \xB7 "), inner), colors.dim);
   const st = STATUS[a.status];
   put(g, b.x + 2, b.y + 3, clip(st.mark, inner), st.color);
   putEffort(g, b.x + 2 + st.mark.length + 2, b.y + 3, a.effort, color, inner - st.mark.length - 2);
@@ -34253,11 +34254,7 @@ function Graph({ state, width, height, tickMs = 120 }) {
   const innerW = Math.max(0, width - 4);
   const innerH = Math.max(0, height - 3);
   const agents = Object.values(state.agents);
-  const layout = (0, import_react22.useMemo)(
-    () => layoutGraph(agents, innerW, innerH),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [agents.map((a) => `${a.key}:${a.status}:${a.toolUseId ?? ""}`).join("|"), innerW, innerH]
-  );
+  const layout = layoutGraph(agents, innerW, innerH, Date.now(), state.taskNo);
   const [frame, setFrame] = (0, import_react22.useState)(0);
   const active = (0, import_react22.useRef)([]);
   const layoutRef = (0, import_react22.useRef)(layout);
@@ -34278,7 +34275,7 @@ function Graph({ state, width, height, tickMs = 120 }) {
   for (const b of layout.boxes) {
     if (b.key === "advisor") drawAdvisor(g, b, state);
     else if (b.key === "main") drawMain(g, b, state, frame);
-    else if (state.agents[b.key]) drawCard(g, b, state.agents[b.key], frame, b.runs);
+    else if (state.agents[b.key]) drawCard(g, b, state.agents[b.key], frame, b.runs, b.tokens);
   }
   drawDots(g, layout, active.current);
   const title = innerW >= "live flow".length + LEGEND.length + 2 ? "live flow" + " ".repeat(innerW - "live flow".length - LEGEND.length) + LEGEND : clip("live flow", innerW);
@@ -34620,7 +34617,7 @@ function modelAlias(model) {
 function agentFor(s, key) {
   let a = s.agents[key];
   if (!a) {
-    a = { key, role: key === "main" ? "main" : "agent", model: "", title: "", tokens: 0, status: "idle" };
+    a = { key, role: key === "main" ? "main" : "agent", model: "", title: "", tokens: 0, status: "idle", taskNo: s.taskNo };
     s.agents[key] = a;
   }
   return a;
@@ -34636,6 +34633,7 @@ var baseName = (p) => String(p ?? "").split("/").pop() || "a file";
 function settle(s, a, status, time) {
   if (a.status === status || a.status === "failed" && status === "done") return;
   a.status = status;
+  if (time) a.finishedAt = time;
   log(s, time, a.role, `${status === "done" ? "finished" : "failed"} ${a.title}`.trim());
 }
 function registerSubagent(s, key, meta) {

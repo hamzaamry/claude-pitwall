@@ -15,7 +15,7 @@ export function modelAlias(model: string): string {
 function agentFor(s: SessionState, key: string): AgentInfo {
   let a = s.agents[key];
   if (!a) {
-    a = { key, role: key === 'main' ? 'main' : 'agent', model: '', title: '', tokens: 0, status: 'idle' };
+    a = { key, role: key === 'main' ? 'main' : 'agent', model: '', title: '', tokens: 0, status: 'idle', taskNo: s.taskNo };
     s.agents[key] = a;
   }
   return a;
@@ -36,6 +36,7 @@ const baseName = (p: unknown) => String(p ?? '').split('/').pop() || 'a file';
 export function settle(s: SessionState, a: AgentInfo, status: 'done' | 'failed', time: string): void {
   if (a.status === status || (a.status === 'failed' && status === 'done')) return;
   a.status = status;
+  if (time) a.finishedAt = time;
   log(s, time, a.role, `${status === 'done' ? 'finished' : 'failed'} ${a.title}`.trim());
 }
 

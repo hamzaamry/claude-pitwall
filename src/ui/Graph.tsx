@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Box, Text } from 'ink';
-import { isReviewer } from '../role.js';
+import { isReviewer, shortRole } from '../role.js';
 import { advisorCallTokens, statusAt, type AgentInfo, type SessionState } from '../model/state.js';
 import { oneLine } from '../oneLine.js';
 import { dotCell, stepFlows, type ActiveFlow } from './flowAnim.js';
@@ -172,14 +172,15 @@ function drawMain(g: Grid, b: Rect, state: SessionState, frame: number): void {
   void frame;
 }
 
-function drawCard(g: Grid, b: Rect, a0: AgentInfo, frame: number, runs = 1): void {
+function drawCard(g: Grid, b: Rect, a0: AgentInfo, frame: number, runs = 1, tokens?: number): void {
   const a = { ...a0, status: statusAt(a0, Date.now()) };
   const color = colorForRole(a.role);
   const inner = b.w - 4;
   box(g, b, a.status === 'working' ? color : a.status === 'failed' ? colors.failed : colors.border);
-  const times = runs > 1 ? ` ×${runs}` : '';
-  put(g, b.x + 2, b.y + 1, clip(a.title || a.role, inner - times.length) + times, a.status === 'idle' || a.status === 'done' ? colors.muted : color);
-  put(g, b.x + 2, b.y + 2, clip([a.role, a.model].filter(Boolean).join(' · '), inner), colors.dim);
+  const folded = tokens !== undefined;
+  const times = folded ? ` ×${runs}` : '';
+  put(g, b.x + 2, b.y + 1, clip(folded ? shortRole(a.role) : a.title || a.role, inner - times.length) + times, a.status === 'idle' || a.status === 'done' ? colors.muted : color);
+  put(g, b.x + 2, b.y + 2, clip(folded ? `${fmtTokens(tokens)} tokens` : [a.role, a.model].filter(Boolean).join(' · '), inner), colors.dim);
   const st = STATUS[a.status];
   put(g, b.x + 2, b.y + 3, clip(st.mark, inner), st.color);
   putEffort(g, b.x + 2 + st.mark.length + 2, b.y + 3, a.effort, color, inner - st.mark.length - 2);
@@ -195,11 +196,8 @@ export function Graph({ state, width, height, tickMs = 120 }: {
   const innerW = Math.max(0, width - 4);
   const innerH = Math.max(0, height - 3);
   const agents = Object.values(state.agents);
-  const layout = useMemo(
-    () => layoutGraph(agents, innerW, innerH),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [agents.map((a) => `${a.key}:${a.status}:${a.toolUseId ?? ''}`).join('|'), innerW, innerH],
-  );
+  // ponytail: re-laid out on every tick so a card folds without a new event; memoize if this ever shows up in a profile
+  const layout = layoutGraph(agents, innerW, innerH, Date.now(), state.taskNo);
   const [frame, setFrame] = useState(0);
   const active = useRef<ActiveFlow[]>([]);
   const layoutRef = useRef(layout);
@@ -222,7 +220,7 @@ export function Graph({ state, width, height, tickMs = 120 }: {
   for (const b of layout.boxes) {
     if (b.key === 'advisor') drawAdvisor(g, b, state);
     else if (b.key === 'main') drawMain(g, b, state, frame);
-    else if (state.agents[b.key]) drawCard(g, b, state.agents[b.key], frame, b.runs);
+    else if (state.agents[b.key]) drawCard(g, b, state.agents[b.key], frame, b.runs, b.tokens);
   }
   drawDots(g, layout, active.current);
 

@@ -100,6 +100,20 @@ describe('registerSubagent', () => {
     expect(s.agents.a1).toMatchObject({ role: 'Explore', title: 'find callers', status: 'done' });
   });
 
+  it('a new agent remembers the task it started in', () => {
+    const s = emptyState('s');
+    s.taskNo = 1;
+    registerSubagent(s, 'a1', { agentType: 'pitwall:runner', description: 'npm test' });
+    expect(s.agents.a1.taskNo).toBe(1);
+  });
+
+  it('settle records when the agent finished', () => {
+    const s = emptyState('s');
+    s.lastActivity = '2026-11-14T10:00:00Z';
+    registerSubagent(s, 'a1', { agentType: 'pitwall:runner', description: 'npm test', finished: true });
+    expect(s.agents.a1.finishedAt).toBe('2026-11-14T10:00:00Z');
+  });
+
   it("keeps the model from the agent's own transcript (meta pickedEffortModel is the parent's model)", () => {
     const s = emptyState('s');
     applyEvent(s, 'a1', asst({ model: 'claude-haiku-5-5' }));
