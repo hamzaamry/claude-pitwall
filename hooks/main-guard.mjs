@@ -3,7 +3,7 @@
 //                                          - searching (Grep, Glob, web, look-only Bash, whole-file Read) -> pitwall:scout
 //                                          - test, build and lint commands                                -> pitwall:runner
 //                                          - writing files through Bash                                   -> Edit / Write
-//                                          - other agent types                                            -> pitwall:scout
+//                                          - other agent types                                            -> the pitwall agent that fits
 //                                          - Edit / Write before the reviewer said "plan approved"
 //                                          - a second final review in the same task
 //   main-guard.mjs start   (SubagentStart): the session's first reviewer is remembered; later reviews continue it.
@@ -15,6 +15,7 @@ import { appendEvent, readState, runHook, teamOn, writeState } from './lib/hook.
 const FROM = 'pitwall plugin hook (installed by the user): ';
 const SCOUT = `${FROM}main does not search. Send a pitwall:scout with one focused question (several in parallel if needed), then Read only the slice it points to, with offset and limit.`;
 const REVIEWER_SCOUT = `${FROM}the reviewer does not search. Send a pitwall:scout with one focused question (several in parallel if needed). Read and git stay allowed.`;
+const FIT_AGENT = `${FROM}main only starts pitwall agents. A skill may name its own agent type; send the one that fits instead: pitwall:scout to search, pitwall:runner for tests, build or lint, pitwall:reviewer to review.`;
 const RUNNER = `${FROM}main does not run tests, build or lint. Send the command to pitwall:runner.`;
 const NO_BASH_WRITES = `${FROM}write code with the Edit or Write tool, not through Bash.`;
 const ONE_REVIEW = `${FROM}the final review for this task is already done. Apply its points and finish; no second review.`;
@@ -94,7 +95,7 @@ function check(input) {
   }
   if (SEARCH_TOOLS.has(tool)) return deny(sid, SCOUT, 'guard-search');
   if (tool === 'Read' && ti.offset === undefined && ti.pages === undefined && !NOT_TEXT.test(String(ti.file_path ?? ''))) return deny(sid, SCOUT, 'guard-search');
-  if (tool === 'Agent' && !String(ti.subagent_type ?? '').startsWith('pitwall:')) return deny(sid, SCOUT, 'guard-search');
+  if (tool === 'Agent' && !String(ti.subagent_type ?? '').startsWith('pitwall:')) return deny(sid, FIT_AGENT, 'guard-agent-type');
   const toReviewer = (tool === 'Agent' && isReviewer(ti.subagent_type)) || (tool === 'SendMessage' && ti.to && ti.to === readState(sid).reviewerId);
   if (toReviewer && PLAN_SKIP.test(String(ti.prompt ?? ti.message ?? '').trimStart())) {
     writeState(sid, { ...readState(sid), planOk: true, finalReviewed: false });
