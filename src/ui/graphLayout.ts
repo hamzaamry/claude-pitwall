@@ -55,7 +55,7 @@ export function layoutGraph(agents: AgentInfo[], width: number, height: number, 
   for (const a of helpers) if (folds(a)) folded.set(a.role, [...(folded.get(a.role) ?? []), a]);
   const runsOf = new Map<string, AgentInfo[]>();
   for (const [role, runs] of folded) {
-    const hidden = taskNo !== undefined && !runs.some((r) => r.taskNo === taskNo)
+    const hidden = taskNo !== undefined && !runs.some((r) => r.taskNo === undefined || r.taskNo === taskNo)
       && !helpers.some((a) => a.role === role && !isFinished(a));
     if (!hidden) runsOf.set(runs[runs.length - 1].key, runs);
   }

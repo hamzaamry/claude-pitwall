@@ -44,6 +44,16 @@ describe('Graph', () => {
     expect(f).toContain('10 tokens');
   });
 
+  it('folds finished runners into one role card with their tokens', () => {
+    const s = base();
+    for (const k of ['r1', 'r2', 'r3'])
+      s.agents[k] = { key: k, role: 'runner', model: 'haiku', title: `npm test ${k}`, tokens: 1000, status: 'done', taskNo: 0 };
+    const f = render(<Graph state={s} width={100} height={22} tickMs={0} />).lastFrame()!;
+    expect(f).toContain('runner ×3');
+    expect(f).toContain('3k tokens');
+    expect(f).not.toContain('npm test r1');
+  });
+
   it('draws status markers for done and failed cards', () => {
     const s = base();
     s.agents.a1 = { key: 'a1', role: 'Explore', model: 'haiku', title: 'one', tokens: 5, status: 'done' };
